@@ -37,6 +37,9 @@ Supports document understanding across **PDFs, DOCX, images, audio, web URLs, an
 
 ## 🗂️ Folder Structure
 
+<img width="237" height="672" alt="image" src="https://github.com/user-attachments/assets/98df448f-c0df-4410-804d-52e9bf97b298" />
+
+
 Smart-RAG/
 ├── app/
 │ ├── main.py
