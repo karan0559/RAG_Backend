@@ -40,48 +40,6 @@ Supports document understanding across **PDFs, DOCX, images, audio, web URLs, an
 <img width="237" height="672" alt="image" src="https://github.com/user-attachments/assets/98df448f-c0df-4410-804d-52e9bf97b298" />
 
 
-Smart-RAG/
-├── app/
-│ ├── main.py
-│ ├── Routes/
-│ │ ├── upload.py
-│ │ ├── query.py
-│ │ ├── compare.py
-│ │ ├── convert.py
-│ │ ├── docs.py
-│ │ └── audio.py
-│ ├── Services/
-│ │ ├── extractor.py
-│ │ ├── embedder.py
-│ │ ├── llm.py
-│ │ ├── retriever.py
-│ │ ├── reranker.py
-│ │ ├── tts.py
-│ │ ├── vector_db.py
-│ │ └── parsers/
-│ │ ├── pdf_parser.py
-│ │ ├── docx_parser.py
-│ │ ├── image_ocr.py
-│ │ ├── audio_transcriber.py
-│ │ ├── url_scraper.py
-│ │ └── youtube_transcriber.py
-│ ├── Memory/
-│ │ └── memory_db.py
-│ ├── utils/
-│ │ └── helpers.py
-├── data/
-│ ├── uploads/
-│ ├── chroma_memory/
-│ ├── converted_files/
-│ └── audio_responses/
-├── .env
-├── requirements.txt
-├── README.md
-└── .gitignore
-
-
----
-
 ## 🧪 API Endpoints
 
 ### `/upload/`
