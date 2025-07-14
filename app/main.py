@@ -25,14 +25,15 @@ app.add_middleware(
 )
 
 # 📦 Import all route modules
-from app.Routes import upload, query, compare, convert, docs  # ✅ Include new docs route
+from app.Routes import upload, query, compare, convert, docs, audio  # ✅ Include new audio route
 
 # 🔗 Register all routers
 app.include_router(upload.router, prefix="/upload", tags=["Upload"])
 app.include_router(query.router, prefix="/query", tags=["Query"])
 app.include_router(compare.router, prefix="/compare", tags=["Compare"])
 app.include_router(convert.router, prefix="/convert", tags=["Convert"])
-app.include_router(docs.router, prefix="/docs", tags=["Documents"])  # ✅ Register docs route
+app.include_router(docs.router, prefix="/docs", tags=["Documents"])
+app.include_router(audio.router, prefix="/audio", tags=["Audio"])  # ✅ Register audio route
 
 # 🔁 Root redirects to Swagger UI
 @app.get("/", include_in_schema=False)

@@ -1,3 +1,5 @@
+# app/Services/vector_db.py
+
 import faiss
 import numpy as np
 import os
@@ -12,7 +14,7 @@ CHUNKS_PATH = "data/chunks.pkl"
 index = None
 stored_chunks = []
 
-# ✅ Save a new FAISS index from scratch
+# ✅ Save FAISS index and chunks
 def save_index(embeddings: np.ndarray, chunks: list[str]):
     global index, stored_chunks
 
@@ -37,15 +39,17 @@ def load_index():
             stored_chunks = pickle.load(f)
         print(f"📦 Loaded index ({index.ntotal} vectors) and {len(stored_chunks)} chunks.")
     else:
+        index = faiss.IndexFlatIP(DIM)  # Initialize empty
+        stored_chunks = []
         print("⚠️ No existing index found. Start by uploading a document.")
 
-# ✅ Ensure index is loaded
+# ✅ Ensure index is loaded before using
 def ensure_loaded():
     global index
     if index is None or index.ntotal == 0:
         load_index()
 
-# ✅ Add new embeddings to existing index (for new uploads)
+# ✅ Add new embeddings and chunks
 def add_embeddings(new_embeddings: np.ndarray, new_chunks: list[str]):
     global index, stored_chunks
     ensure_loaded()
@@ -53,7 +57,7 @@ def add_embeddings(new_embeddings: np.ndarray, new_chunks: list[str]):
     if index is None:
         index = faiss.IndexFlatIP(DIM)
 
-    # Prevent duplicates
+    # Remove duplicates
     unique_chunks = []
     unique_embeddings = []
     for chunk, emb in zip(new_chunks, new_embeddings):
@@ -65,6 +69,7 @@ def add_embeddings(new_embeddings: np.ndarray, new_chunks: list[str]):
         index.add(np.array(unique_embeddings))
         stored_chunks.extend(unique_chunks)
 
+        # Persist
         faiss.write_index(index, INDEX_PATH)
         with open(CHUNKS_PATH, "wb") as f:
             pickle.dump(stored_chunks, f)
@@ -72,7 +77,6 @@ def add_embeddings(new_embeddings: np.ndarray, new_chunks: list[str]):
         print(f"➕ Added {len(unique_chunks)} new unique chunks (total: {index.ntotal})")
     else:
         print("⚠️ No new unique chunks to add.")
-
 
 # ✅ Search top-k similar chunks
 def search(query_vector: np.ndarray, top_k=5):
@@ -95,7 +99,7 @@ def search(query_vector: np.ndarray, top_k=5):
 
     return results
 
-# ✅ Get metadata info
+# ✅ Expose metadata
 def get_index_info():
     global index
     if index:

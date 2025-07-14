@@ -1,5 +1,3 @@
-# app/Memory/memory_db.py
-
 from sentence_transformers import SentenceTransformer
 import chromadb
 import os
@@ -20,12 +18,25 @@ embedding_model = SentenceTransformer("intfloat/e5-large-v2")
 def embed(text: str):
     return embedding_model.encode([f"query: {text}"])[0].tolist()
 
-# ✅ Add one interaction to memory
-def add_to_memory(session_id: str, user_input: str, bot_output: str):
+# ✅ Add one interaction to memory (with optional source and context snippet)
+def add_to_memory(
+    session_id: str,
+    user_input: str,
+    bot_output: str,
+    source: str = "retriever",
+    context_snippet: str = None
+):
+    metadata = {
+        "session_id": session_id,
+        "source": source
+    }
+    if context_snippet:
+        metadata["context"] = context_snippet[:1000]
+
     collection.add(
         ids=[str(uuid.uuid4())],
         documents=[f"User: {user_input}\nAssistant: {bot_output}"],
-        metadatas={"session_id": session_id},
+        metadatas=[metadata],
         embeddings=[embed(user_input + bot_output)]
     )
 
