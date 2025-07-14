@@ -17,11 +17,10 @@ async def convert_file(file: UploadFile = File(...), output_format: str = Form(.
         with open(input_path, "wb") as f:
             shutil.copyfileobj(file.file, f)
 
-        # ✅ Output path
+      
         output_filename = f"{Path(file.filename).stem}_converted.{output_format}"
         output_path = os.path.join(CONVERTED_DIR, output_filename)
 
-        # ✅ Perform conversion
         if file_ext == "pdf" and output_format == "docx":
             from app.Services.convertors.pdf_to_docx import convert_pdf_to_docx
             convert_pdf_to_docx(input_path, output_path)

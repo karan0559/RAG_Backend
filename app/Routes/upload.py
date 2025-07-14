@@ -35,7 +35,7 @@ async def upload_file_or_input(
     }
 
     try:
-        # ✅ FILE UPLOAD PATH
+        # FILE UPLOAD PATH
         if file:
             filename = file.filename
             ext = os.path.splitext(filename)[1].lower()
@@ -56,7 +56,7 @@ async def upload_file_or_input(
             chunks = extractor.extract_content(str(save_path), file_type)
             doc_id = filename.rsplit(".", 1)[0]
 
-        # ✅ TEXT INPUT PATH (URL / YouTube)
+        # TEXT INPUT PATH 
         elif input_text:
             input_text = input_text.strip()
             if "youtube.com" in input_text or "youtu.be" in input_text:
@@ -75,7 +75,7 @@ async def upload_file_or_input(
         else:
             raise HTTPException(status_code=400, detail="Please upload a file or enter a valid input_text.")
 
-        # ✅ Step 2: Embed chunks with doc_id
+        # Embedding chunks with doc_id
         if isinstance(chunks, list) and chunks:
             embeddings = embedder.embed_chunks(chunks, doc_id=doc_id)
             print("✅ Embedding complete.")
@@ -86,7 +86,7 @@ async def upload_file_or_input(
 
         return JSONResponse({
             "id": uid,
-            "doc_id": doc_id,  # ✅ Expose doc_id
+            "doc_id": doc_id,  
             "original_filename": filename,
             "file_type": file_type,
             "saved_path": str(save_path),

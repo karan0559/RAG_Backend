@@ -6,10 +6,10 @@ from app.Services.parsers import (
     url_scraper,
     youtube_transcriber
 )
-from app.Services.chunkings import semantic_chunk_text  # ✅ import your chunker
+from app.Services.chunkings import semantic_chunk_text  
 
 def extract_content(path_or_input: str, file_type: str):
-    # Step 1: Parse raw content
+    # Parse raw content
     if file_type == "pdf":
         text = pdf_parser.parse_pdf(path_or_input)
     elif file_type == "docx":
@@ -25,11 +25,10 @@ def extract_content(path_or_input: str, file_type: str):
     else:
         raise ValueError(f"Unsupported file type: {file_type}")
 
-    # Step 2: Return chunked output
+    #Return chunked output
     if isinstance(text, str):
         return semantic_chunk_text(text, chunk_size=3, overlap=1)
     elif isinstance(text, list):
-        # In case your audio/youtube returns a list of lines, join and chunk
         joined = " ".join(text)
         return semantic_chunk_text(joined, chunk_size=3, overlap=1)
     else:

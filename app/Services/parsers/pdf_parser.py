@@ -1,4 +1,4 @@
-import fitz  # PyMuPDF
+import fitz  
 
 def parse_pdf(path: str):
     try:

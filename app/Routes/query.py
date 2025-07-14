@@ -30,7 +30,7 @@ async def query_rag(request: Request, body: QueryRequest):
         doc_context = ""
         final_chunks = []
 
-        # Step 1: Retrieve top chunks
+        #Retrieve top chunks
         top_chunks = retriever.retrieve_top_chunks(body.query, top_k=10)
         print(f"📥 Retrieved {len(top_chunks)} chunks")
 
@@ -50,25 +50,25 @@ async def query_rag(request: Request, body: QueryRequest):
 
             if all(score < RELEVANCE_THRESHOLD for score in final_scores):
                 fallback_used = True
-                print("🔁 Fallback to Web Search (All chunks below threshold)")
+                print("Fallback to Web Search (All chunks below threshold)")
                 doc_context = web_search.search_web(body.query)
             else:
                 doc_context = "\n\n".join([chunk["chunk"] for chunk in final_chunks])
         else:
             fallback_used = True
-            print("🔁 Fallback (No chunks retrieved at all)")
+            print(" Fallback (No chunks retrieved at all)")
             doc_context = web_search.search_web(body.query)
 
-        # Step 2: Build context with memory
+        #Build context with memory
         chat_history = memory_db.get_recent_history(session_id, limit=20)
         combined_context = f"{chat_history}\n\n{doc_context}".strip()
         print(f"📚 Combined context length: {len(combined_context)} chars")
 
-        # Step 3: Get LLM answer
+        #Get LLM answer
         answer = llm.answer_question(context=combined_context, question=body.query)
         print(f"🧠 LLM Answer: {answer}")
 
-        # Step 4: Save to memory
+        #Save to memory
         source = "web_search" if fallback_used else "retriever"
         context_snippet = doc_context[:1000]
         memory_db.add_to_memory(
@@ -79,17 +79,17 @@ async def query_rag(request: Request, body: QueryRequest):
             context_snippet=context_snippet
         )
 
-        # Step 5: Generate TTS (if enabled)
+        #Generate TTS
         tts_path = None
         if body.tts:
-            print("🔊 Generating TTS...")
+            print(" Generating TTS...")
             try:
                 tts_file = await generate_tts(answer)
                 tts_filename = Path(tts_file).name.strip().replace('"', '').replace("'", "")
-                tts_path = f"/audio/{tts_filename}"  # ✅ Return relative path only
+                tts_path = f"/audio/{tts_filename}"  
                 print(f"🔈 TTS URL: {tts_path}")
             except Exception as tts_err:
-                print(f"⚠️ TTS generation failed: {tts_err}")
+                print(f" TTS generation failed: {tts_err}")
                 tts_path = None
 
         return {

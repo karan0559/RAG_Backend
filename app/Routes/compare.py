@@ -8,7 +8,7 @@ router = APIRouter()
 
 class CompareRequest(BaseModel):
     doc_ids: list[str]
-    mode: str = "compare"  # or "summarize"
+    mode: str = "compare"  
     question: str = ""
 
 

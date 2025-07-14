@@ -2,9 +2,8 @@ import os
 import requests
 from dotenv import load_dotenv
 from typing import Optional
-from app.Memory import memory_db  # ✅ Chat memory
+from app.Memory import memory_db  
 
-# 🌱 Load .env
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
@@ -46,7 +45,7 @@ def answer_question(context: str, question: str, session_id: Optional[str] = Non
     if session_id:
         memory_context = memory_db.get_recent_history(session_id, limit=30)
 
-    # ✅ Final context for LLM
+    #context for LLM
     prompt = {
         "model": GROQ_MODEL,
         "temperature": 0.7,
@@ -65,10 +64,10 @@ def answer_question(context: str, question: str, session_id: Optional[str] = Non
         ]
     }
 
-    # 🔁 Call Groq LLM
+    # Call Groq 
     answer = call_groq_llm(prompt)
 
-    # ✅ Store to memory
+    # Store to memory
     if session_id:
         memory_db.add_to_memory(session_id, user_input=question, bot_output=answer)
 

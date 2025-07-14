@@ -4,7 +4,6 @@ from typing import List
 
 def extract_from_url(url: str) -> List[str]:
     try:
-        # ✅ Fetch raw HTML using requests with timeout and User-Agent
         response = requests.get(url, timeout=10, headers={
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64)"
         })
@@ -12,7 +11,6 @@ def extract_from_url(url: str) -> List[str]:
         if response.status_code != 200:
             return [f"❌ Failed to fetch URL. Status code: {response.status_code}"]
 
-        # ✅ Use trafilatura.extract on raw HTML
         text = trafilatura.extract(
             response.text,
             include_comments=False,

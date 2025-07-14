@@ -1,5 +1,3 @@
-# Services/web_search.py
-
 import requests
 import os
 
