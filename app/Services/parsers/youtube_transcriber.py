@@ -14,7 +14,7 @@ def extract_youtube_transcript(url: str):
 def extract_video_id(url: str) -> str:
     parsed = urlparse(url)
     if "youtu.be" in parsed.netloc:
-        return parsed.path.lstrip("/")  # ✅ handles "/videoID"
+        return parsed.path.lstrip("/")  
     elif "youtube.com" in parsed.netloc:
-        return parse_qs(parsed.query).get("v", [""])[0]  # ✅ handles watch?v=
+        return parse_qs(parsed.query).get("v", [""])[0] 
     return ""
