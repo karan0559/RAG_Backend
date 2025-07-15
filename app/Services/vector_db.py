@@ -22,8 +22,8 @@ def save_index(embeddings: np.ndarray, chunks: list[str]):
         pickle.dump(chunks, f)
 
     stored_chunks = chunks
-    print(f"✅ Saved index with {len(chunks)} vectors → {INDEX_PATH}")
-    print(f"📝 Saved {len(chunks)} chunks → {CHUNKS_PATH}")
+    print(f"Saved index with {len(chunks)} vectors → {INDEX_PATH}")
+    print(f" Saved {len(chunks)} chunks → {CHUNKS_PATH}")
 
 # Load FAISS index and chunks from disk
 def load_index():
@@ -33,11 +33,11 @@ def load_index():
         index = faiss.read_index(INDEX_PATH)
         with open(CHUNKS_PATH, "rb") as f:
             stored_chunks = pickle.load(f)
-        print(f"📦 Loaded index ({index.ntotal} vectors) and {len(stored_chunks)} chunks.")
+        print(f" Loaded index ({index.ntotal} vectors) and {len(stored_chunks)} chunks.")
     else:
         index = faiss.IndexFlatIP(DIM)  
         stored_chunks = []
-        print("⚠️ No existing index found. Start by uploading a document.")
+        print(" No existing index found. Start by uploading a document.")
 
 # Ensure index is loaded before using
 def ensure_loaded():
@@ -69,16 +69,16 @@ def add_embeddings(new_embeddings: np.ndarray, new_chunks: list[str]):
         with open(CHUNKS_PATH, "wb") as f:
             pickle.dump(stored_chunks, f)
 
-        print(f"➕ Added {len(unique_chunks)} new unique chunks (total: {index.ntotal})")
+        print(f" Added {len(unique_chunks)} new unique chunks (total: {index.ntotal})")
     else:
-        print("⚠️ No new unique chunks to add.")
+        print("No new unique chunks to add.")
 
 # Search top-k similar chunks
 def search(query_vector: np.ndarray, top_k=5):
     ensure_loaded()
 
     if index is None or index.ntotal == 0:
-        print("❌ FAISS index is empty or not loaded.")
+        print(" FAISS index is empty or not loaded.")
         return []
 
     D, I = index.search(np.array([query_vector]), top_k)

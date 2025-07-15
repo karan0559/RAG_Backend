@@ -38,9 +38,9 @@ async def convert_file(file: UploadFile = File(...), output_format: str = Form(.
             convert_txt_to_excel(input_path, output_path)
 
         else:
-            raise HTTPException(status_code=400, detail=f"❌ Unsupported conversion: {file_ext} → {output_format}")
+            raise HTTPException(status_code=400, detail=f" Unsupported conversion: {file_ext} → {output_format}")
 
         return FileResponse(output_path, filename=output_filename, media_type="application/octet-stream")
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"❌ Conversion failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f" Conversion failed: {str(e)}")

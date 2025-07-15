@@ -16,7 +16,7 @@ def convert_to_wav(input_path: str, target_sr=16000) -> str:
         "-ac", "1",            
         output_path
     ]
-    print(f"🔄 Converting {input_path} → {output_path}")
+    print(f" Converting {input_path} → {output_path}")
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     return output_path
 
@@ -26,9 +26,9 @@ def transcribe_audio(path: str):
         if ext != ".wav":
             path = convert_to_wav(path)
 
-        print(f"🎧 Transcribing file: {path}")
+        print(f" Transcribing file: {path}")
         segments, _ = model.transcribe(path)
 
         return [segment.text for segment in segments if segment.text.strip()]
     except Exception as e:
-        return [f"❌ Transcription failed: {e}"]
+        return [f" Transcription failed: {e}"]

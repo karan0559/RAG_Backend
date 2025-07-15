@@ -24,7 +24,7 @@ RELEVANCE_THRESHOLD = 0.15
 async def query_rag(request: Request, body: QueryRequest):
     try:
         session_id = body.session_id or str(uuid.uuid4())
-        print(f"\n🔍 Query: {body.query} | Session ID: {session_id}")
+        print(f"\n Query: {body.query} | Session ID: {session_id}")
 
         fallback_used = False
         doc_context = ""
@@ -32,7 +32,7 @@ async def query_rag(request: Request, body: QueryRequest):
 
         #Retrieve top chunks
         top_chunks = retriever.retrieve_top_chunks(body.query, top_k=10)
-        print(f"📥 Retrieved {len(top_chunks)} chunks")
+        print(f"Retrieved {len(top_chunks)} chunks")
 
         if top_chunks:
             raw_texts = [chunk["chunk"] for chunk in top_chunks]
@@ -66,7 +66,7 @@ async def query_rag(request: Request, body: QueryRequest):
 
         #Get LLM answer
         answer = llm.answer_question(context=combined_context, question=body.query)
-        print(f"🧠 LLM Answer: {answer}")
+        print(f" LLM Answer: {answer}")
 
         #Save to memory
         source = "web_search" if fallback_used else "retriever"

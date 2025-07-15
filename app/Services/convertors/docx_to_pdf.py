@@ -6,7 +6,7 @@ def convert_docx_to_pdf(input_path: str, output_path: str):
         input_abs = os.path.abspath(input_path)
         output_abs = os.path.abspath(output_path)
 
-        print(f"📄 Converting DOCX → PDF\nInput: {input_abs}\nOutput: {output_abs}")
+        print(f" Converting DOCX → PDF\nInput: {input_abs}\nOutput: {output_abs}")
         word = comtypes.client.CreateObject("Word.Application")
         word.Visible = False
         doc = word.Documents.Open(input_abs)
@@ -15,4 +15,4 @@ def convert_docx_to_pdf(input_path: str, output_path: str):
         word.Quit()
 
     except Exception as e:
-        raise RuntimeError(f"❌ DOCX to PDF conversion failed: {e}")
+        raise RuntimeError(f" DOCX to PDF conversion failed: {e}")

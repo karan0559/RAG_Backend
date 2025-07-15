@@ -38,9 +38,9 @@ from app.Services import vector_db
 
 @app.on_event("startup")
 def on_startup():
-    print("🚀 Initializing RAG system...")
+    print("Initializing RAG system...")
     vector_db.load_index()
     try:
         webbrowser.open("http://127.0.0.1:8000/docs")
     except:
-        print("⚠️ Could not open browser automatically.")
+        print(" Could not open browser automatically.")

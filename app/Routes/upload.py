@@ -50,8 +50,8 @@ async def upload_file_or_input(
             with open(save_path, "wb") as f:
                 f.write(await file.read())
 
-            print(f"📦 File saved at: {save_path}")
-            print(f"📂 File type detected: {file_type}")
+            print(f" File saved at: {save_path}")
+            print(f"File type detected: {file_type}")
 
             chunks = extractor.extract_content(str(save_path), file_type)
             doc_id = filename.rsplit(".", 1)[0]
@@ -78,11 +78,11 @@ async def upload_file_or_input(
         # Embedding chunks with doc_id
         if isinstance(chunks, list) and chunks:
             embeddings = embedder.embed_chunks(chunks, doc_id=doc_id)
-            print("✅ Embedding complete.")
+            print("Embedding complete.")
         else:
             chunks = [chunks] if isinstance(chunks, str) else []
             embeddings = []
-            print("⚠️ No valid chunks to embed.")
+            print("No valid chunks to embed.")
 
         return JSONResponse({
             "id": uid,

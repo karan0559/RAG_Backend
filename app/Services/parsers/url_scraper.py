@@ -9,7 +9,7 @@ def extract_from_url(url: str) -> List[str]:
         })
 
         if response.status_code != 200:
-            return [f"❌ Failed to fetch URL. Status code: {response.status_code}"]
+            return [f" Failed to fetch URL. Status code: {response.status_code}"]
 
         text = trafilatura.extract(
             response.text,
@@ -17,11 +17,11 @@ def extract_from_url(url: str) -> List[str]:
             include_tables=False
         )
 
-        return [text.strip()] if text else ["❌ No meaningful text extracted."]
+        return [text.strip()] if text else [" No meaningful text extracted."]
 
     except requests.exceptions.Timeout:
-        return ["❌ URL extraction timed out."]
+        return ["URL extraction timed out."]
     except requests.exceptions.RequestException as e:
-        return [f"❌ Request failed: {str(e)}"]
+        return [f" Request failed: {str(e)}"]
     except Exception as e:
-        return [f"❌ URL extraction failed: {str(e)}"]
+        return [f" URL extraction failed: {str(e)}"]

@@ -22,9 +22,4 @@ def semantic_chunk_text(text: str, chunk_size: int = 3, overlap: int = 1) -> Lis
         chunks.append(' '.join(chunk))
         i += chunk_size - overlap
 
-    # Step 3: Optionally sort chunks by similarity (future use)
-    # embeddings = model.encode(chunks, convert_to_tensor=True)
-    # similarity = util.pytorch_cos_sim(embeddings, embeddings)
-    # (Optional: sort or filter based on sim score)
-
     return chunks

@@ -15,7 +15,7 @@ def call_groq_llm(payload: dict) -> str:
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY is not set in .env")
 
-    print("🛠️ Diagnostic Payload Sent to Groq API:")
+    print(" Diagnostic Payload Sent to Groq API:")
     print(payload)
 
     try:
@@ -30,7 +30,7 @@ def call_groq_llm(payload: dict) -> str:
         return data["choices"][0]["message"]["content"].strip()
 
     except requests.exceptions.HTTPError as e:
-        print("❌ Groq API error:", response.text)
+        print(" Groq API error:", response.text)
         raise RuntimeError(f"LLM request failed: {e}")
     except Exception as e:
         raise RuntimeError(f"LLM unexpected error: {e}")

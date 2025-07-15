@@ -25,7 +25,7 @@ def extract_content(path_or_input: str, file_type: str) -> list[str]:
         elif file_type == "youtube":
             text = youtube_transcriber.extract_youtube_transcript(path_or_input)
         else:
-            return [f"❌ Unsupported file type: {file_type}"]
+            return [f" Unsupported file type: {file_type}"]
 
         # Step 2: Normalize to string and chunk
         if isinstance(text, str):
@@ -34,7 +34,7 @@ def extract_content(path_or_input: str, file_type: str) -> list[str]:
             joined_text = " ".join(text)
             return semantic_chunk_text(joined_text, chunk_size=3, overlap=1)
         else:
-            return ["❌ Unsupported parser output format"]
+            return [" Unsupported parser output format"]
 
     except Exception as e:
-        return [f"❌ Extraction failed: {str(e)}"]
+        return [f" Extraction failed: {str(e)}"]
