@@ -44,3 +44,8 @@ def on_startup():
         webbrowser.open("http://127.0.0.1:8000/docs")
     except:
         print(" Could not open browser automatically.")
+
+
+
+
+
