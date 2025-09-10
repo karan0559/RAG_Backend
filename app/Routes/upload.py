@@ -13,7 +13,7 @@ UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
 
-@router.post("/upload/", summary="Upload file or input URL/YouTube link")
+@router.post("/", summary="Upload file or input URL/YouTube link")  # <-- Change here
 async def upload_file_or_input(
     file: Optional[UploadFile] = File(default=None),
     input_text: Union[str, None] = Form(default=None)

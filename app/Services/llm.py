@@ -25,13 +25,19 @@ def call_groq_llm(payload: dict) -> str:
             json=payload,
             timeout=20
         )
-        response.raise_for_status()
+        
+        # Check if response is successful before trying to parse
+        if response.status_code != 200:
+            error_details = response.text
+            print(f"🚨 Groq API error (Status {response.status_code}): {error_details}")
+            raise RuntimeError(f"LLM request failed: {response.status_code} - {error_details}")
+        
         data = response.json()
         return data["choices"][0]["message"]["content"].strip()
 
-    except requests.exceptions.HTTPError as e:
-        print(" Groq API error:", response.text)
-        raise RuntimeError(f"LLM request failed: {e}")
+    except requests.exceptions.RequestException as e:
+        print(f"🚨 Request error: {str(e)}")
+        raise RuntimeError(f"LLM request failed: {str(e)}")
     except Exception as e:
         raise RuntimeError(f"LLM unexpected error: {e}")
 

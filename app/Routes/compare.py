@@ -12,7 +12,7 @@ class CompareRequest(BaseModel):
     question: str = ""
 
 
-@router.post("/compare/", summary="Compare or summarize multiple documents")
+@router.post("/", summary="Compare or summarize multiple documents")
 async def compare_or_summarize(request: CompareRequest):
     try:
         doc_chunks = retriever.get_chunks_by_doc_ids(request.doc_ids)

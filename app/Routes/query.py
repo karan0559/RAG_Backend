@@ -20,7 +20,7 @@ class QueryRequest(BaseModel):
 reranker = Reranker()
 RELEVANCE_THRESHOLD = 0.15
 
-@router.post("/query/", summary="Ask a question over uploaded content")
+@router.post("/", summary="Ask a question over uploaded content")
 async def query_rag(request: Request, body: QueryRequest):
     try:
         session_id = body.session_id or str(uuid.uuid4())

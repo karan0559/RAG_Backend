@@ -10,7 +10,7 @@ class Reranker:
             self.device = "cuda" if torch.cuda.is_available() else "cpu"
         else:
             self.device = device
-
+  
         self.model.to(self.device)
 
     def rerank(self, query: str, passages: list[str], top_n=5):

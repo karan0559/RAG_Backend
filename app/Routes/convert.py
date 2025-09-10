@@ -9,7 +9,7 @@ router = APIRouter()
 CONVERTED_DIR = "data/converted_files"
 os.makedirs(CONVERTED_DIR, exist_ok=True)
 
-@router.post("/convert/", summary="Convert a file to another format")
+@router.post("/", summary="Convert a file to another format")
 async def convert_file(file: UploadFile = File(...), output_format: str = Form(...)):
     try:
         file_ext = Path(file.filename).suffix.lower().strip(".")
