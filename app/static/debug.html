@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Test</title>
+</head>
+<body>
+    <h1>JavaScript Debug Test</h1>
+    
+    <button onclick="alert('Simple alert works!')">Test 1: Simple Alert</button><br><br>
+    
+    <button onclick="testShowQuickAction()">Test 2: showQuickAction</button><br><br>
+    
+    <button onclick="testShowTips()">Test 3: showTips</button><br><br>
+    
+    <div id="debug-output"></div>
+    
+    <script>
+        function testShowQuickAction() {
+            try {
+                if (typeof showQuickAction === 'function') {
+                    showQuickAction('docs');
+                    document.getElementById('debug-output').innerHTML = 'showQuickAction called successfully!';
+                } else {
+                    document.getElementById('debug-output').innerHTML = 'showQuickAction is not defined: ' + typeof showQuickAction;
+                }
+            } catch (e) {
+                document.getElementById('debug-output').innerHTML = 'Error: ' + e.message;
+            }
+        }
+        
+        function testShowTips() {
+            try {
+                if (typeof showTips === 'function') {
+                    showTips();
+                    document.getElementById('debug-output').innerHTML = 'showTips called successfully!';
+                } else {
+                    document.getElementById('debug-output').innerHTML = 'showTips is not defined: ' + typeof showTips;
+                }
+            } catch (e) {
+                document.getElementById('debug-output').innerHTML = 'Error: ' + e.message;
+            }
+        }
+    </script>
+    
+    <script src="/static/app.js?v=2"></script>
+</body>
+</html>

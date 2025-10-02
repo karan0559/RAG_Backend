@@ -1,0 +1,531 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant - RAG System</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: white;
+            overflow-x: hidden;
+        }
+
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Header Info */
+        .header-info {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            margin-bottom: 20px;
+        }
+
+        .header-info h1 {
+            margin: 0;
+            font-size: 1.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            font-weight: 600;
+        }
+
+        .header-info p {
+            margin: 8px 0 0 0;
+            color: rgba(255,255,255,0.8);
+            font-size: 1rem;
+        }
+
+        /* Main Content */
+        .content-container {
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(25px);
+            border-radius: 24px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            padding: 30px;
+            flex: 1;
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.1);
+            display: flex;
+            flex-direction: column;
+            position: relative;
+        }
+
+        /* Chat Interface */
+        .chat-container {
+            background: rgba(0, 0, 0, 0.1);
+            border-radius: 20px;
+            padding: 25px;
+            flex: 1;
+            overflow-y: auto;
+            margin-bottom: 25px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            scroll-behavior: smooth;
+        }
+
+        .chat-message {
+            margin-bottom: 20px;
+            animation: fadeInUp 0.5s ease-out;
+        }
+
+        .message-bubble {
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            border-radius: 18px;
+            padding: 16px 20px;
+            max-width: 75%;
+            word-wrap: break-word;
+            line-height: 1.6;
+            font-size: 0.95rem;
+            position: relative;
+        }
+
+        .user-message {
+            text-align: right;
+        }
+
+        .user-message .message-bubble {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 6px;
+            box-shadow: 0 4px 15px rgba(102, 126, 234, 0.4);
+            margin-left: auto;
+        }
+
+        .assistant-message {
+            text-align: left;
+        }
+
+        .assistant-message .message-bubble {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            border-bottom-left-radius: 6px;
+        }
+
+        /* File Attachments in Chat */
+        .file-attachment {
+            background: rgba(102, 126, 234, 0.2);
+            border: 2px solid rgba(102, 126, 234, 0.3);
+            border-radius: 12px;
+            padding: 15px;
+            margin: 10px 0;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .file-attachment .file-icon {
+            width: 40px;
+            height: 40px;
+            background: rgba(102, 126, 234, 0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #667eea;
+            font-size: 1.2rem;
+        }
+
+        .file-attachment .file-info {
+            flex: 1;
+        }
+
+        .file-attachment .file-name {
+            font-weight: 600;
+            color: white;
+            margin-bottom: 4px;
+        }
+
+        .file-attachment .file-size {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 0.85rem;
+        }
+
+        .file-attachment .file-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .file-attachment .file-action-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 6px;
+            padding: 6px 12px;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.8rem;
+        }
+
+        .file-attachment .file-action-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        /* Upload Drop Zone */
+        .upload-drop-zone {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            border: 3px dashed #667eea;
+            border-radius: 20px;
+            margin: 20px;
+        }
+
+        .drop-zone-content {
+            text-align: center;
+            color: white;
+        }
+
+        .drop-zone-content i {
+            font-size: 4rem;
+            color: #667eea;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .drop-zone-text {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .drop-zone-subtext {
+            color: rgba(255, 255, 255, 0.7);
+            font-size: 1rem;
+        }
+
+        /* Chat Input */
+        .chat-input-container {
+            margin-top: auto;
+        }
+
+        .input-row {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            padding: 15px;
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .attachment-button {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 12px;
+            padding: 12px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.1rem;
+        }
+
+        .attachment-button:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        .chat-input {
+            flex: 1;
+            background: transparent;
+            border: none;
+            color: white;
+            font-size: 1rem;
+            resize: none;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 8px 0;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .chat-input::placeholder {
+            color: rgba(255, 255, 255, 0.6);
+        }
+
+        .chat-input:focus {
+            outline: none;
+        }
+
+        .send-button {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 12px 20px;
+            color: white;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.95rem;
+        }
+
+        .send-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+        }
+
+        .send-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        /* Chat Options */
+        .chat-options {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            margin-top: 15px;
+            padding: 0 15px;
+        }
+
+        .option-label {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: rgba(255, 255, 255, 0.8);
+            cursor: pointer;
+            font-size: 0.9rem;
+        }
+
+        .option-label input[type="checkbox"] {
+            margin: 0;
+        }
+
+        /* Quick Actions */
+        .quick-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .quick-action-btn {
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            border-radius: 8px;
+            padding: 8px 10px;
+            color: rgba(255, 255, 255, 0.7);
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-size: 0.9rem;
+        }
+
+        .quick-action-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            transform: translateY(-1px);
+        }
+
+        /* Floating Action Button */
+        .fab {
+            position: fixed;
+            bottom: 30px;
+            right: 30px;
+            width: 60px;
+            height: 60px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            border: none;
+            color: white;
+            font-size: 1.5rem;
+            cursor: pointer;
+            box-shadow: 0 8px 25px rgba(102, 126, 234, 0.4);
+            transition: all 0.3s ease;
+            z-index: 999;
+        }
+
+        .fab:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 12px 35px rgba(102, 126, 234, 0.6);
+        }
+
+        /* Notifications */
+        .notification {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(0, 0, 0, 0.9);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 12px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+            animation: slideInNotification 0.4s ease-out;
+            max-width: 400px;
+        }
+
+        @keyframes slideInNotification {
+            from {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .notification.success {
+            border-left: 4px solid #22c55e;
+        }
+
+        .notification.error {
+            border-left: 4px solid #ef4444;
+        }
+
+        .notification.info {
+            border-left: 4px solid #3b82f6;
+        }
+
+        /* Animations */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            .content-container {
+                padding: 20px;
+            }
+            
+            .chat-options {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header-info">
+            <h1>
+                <i class="fas fa-robot" style="color: #667eea;"></i>
+                AI Assistant
+            </h1>
+            <p>Chat, upload files, convert documents, and more - all in one place</p>
+        </div>
+
+        <div class="content-container">
+            <!-- Unified Chat Interface -->
+            <div class="chat-container" id="chat-container">
+                <!-- Messages will be dynamically added here -->
+            </div>
+
+            <!-- File Upload Drop Zone (Hidden by default) -->
+            <div class="upload-drop-zone" id="upload-drop-zone">
+                <div class="drop-zone-content">
+                    <i class="fas fa-cloud-upload-alt"></i>
+                    <div class="drop-zone-text">Drop files here to upload</div>
+                    <div class="drop-zone-subtext">PDF, DOCX, Images, Audio files</div>
+                </div>
+            </div>
+
+            <!-- Chat Input with Attachment Button -->
+            <div class="chat-input-container">
+                <div class="input-row">
+                    <button class="attachment-button" id="attachment-button" title="Attach files">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <textarea class="chat-input" id="chat-input" placeholder="Ask me anything or drag & drop files to upload..."></textarea>
+                    <button class="send-button" id="send-button">
+                        <i class="fas fa-paper-plane"></i>
+                        Send
+                    </button>
+                </div>
+                <div class="chat-options">
+                    <label class="option-label">
+                        <input type="checkbox" id="tts-enabled">
+                        <i class="fas fa-volume-up"></i>
+                        Text-to-Speech
+                    </label>
+                    <div class="quick-actions">
+                        <button class="quick-action-btn" onclick="showQuickAction('convert')" title="Convert files">
+                            <i class="fas fa-exchange-alt"></i>
+                        </button>
+                        <button class="quick-action-btn" onclick="showQuickAction('compare')" title="Compare documents">
+                            <i class="fas fa-balance-scale"></i>
+                        </button>
+                        <button class="quick-action-btn" onclick="showQuickAction('docs')" title="View documents">
+                            <i class="fas fa-folder-open"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hidden file input -->
+            <input type="file" id="file-input" style="display: none;" multiple 
+                   accept=".pdf,.docx,.jpg,.jpeg,.png,.mp3,.wav,.ogg,.m4a">
+        </div>
+    </div>
+
+    <!-- Floating Action Button -->
+    <button class="fab" onclick="showTips()" title="Help & Tips">
+        <i class="fas fa-lightbulb"></i>
+    </button>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
