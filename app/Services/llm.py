@@ -48,7 +48,12 @@ async def call_groq_llm(payload: dict) -> str:
         raise RuntimeError(f"LLM network error: {str(e)}")
 
 
-async def answer_question(context: str, question: str, session_id: Optional[str] = None) -> str:
+async def answer_question(
+    context: str,
+    question: str,
+    session_id: Optional[str] = None,
+    use_documents: bool = True,
+) -> str:
     """
     Answer a user question, injecting memory from previous interactions.
     Saves the turn to memory after answering (only once — callers must NOT save again).
@@ -57,28 +62,36 @@ async def answer_question(context: str, question: str, session_id: Optional[str]
     if session_id:
         memory_context = memory_db.get_recent_history(session_id, limit=10)
 
+    if use_documents:
+        system_prompt = (
+            "You are a helpful assistant. "
+            "Answer questions using the provided document context. "
+            "If the context contains the answer, use it. "
+            "If the context is missing or insufficient, say that clearly and ask a short follow-up. "
+            "Be concise and accurate."
+        )
+        user_prompt = (
+            f"Conversation History:\n{memory_context or 'None'}\n\n"
+            f"Document Context:\n{context or 'None'}\n\n"
+            f"Question:\n{question}"
+        )
+    else:
+        system_prompt = (
+            "You are a friendly and concise AI assistant. "
+            "For greetings or small talk, reply naturally in 1-2 short sentences."
+        )
+        user_prompt = (
+            f"Conversation History:\n{memory_context or 'None'}\n\n"
+            f"User message:\n{question}"
+        )
+
     prompt = {
         "model": GROQ_MODEL,
         "temperature": 0.7,
         "max_tokens": 1024,
         "messages": [
-            {
-                "role": "system",
-                "content": (
-                    "You are a helpful assistant. "
-                    "Answer questions using the provided document context. "
-                    "If the context contains the answer, use it. "
-                    "Be concise and accurate."
-                ),
-            },
-            {
-                "role": "user",
-                "content": (
-                    f"Conversation History:\n{memory_context or 'None'}\n\n"
-                    f"Document Context:\n{context}\n\n"
-                    f"Question:\n{question}"
-                ),
-            },
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt},
         ],
     }
 
