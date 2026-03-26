@@ -8,7 +8,7 @@ router = APIRouter()
 
 class CompareRequest(BaseModel):
     doc_ids: list[str]
-    mode: str = "compare"  
+    mode: str = "compare"
     question: str = ""
 
 
@@ -22,11 +22,11 @@ async def compare_or_summarize(request: CompareRequest):
 
         if request.mode == "summarize":
             all_text = "\n\n".join(["\n".join(chunks) for chunks in doc_chunks.values()])
-            result = llm.summarize_text(all_text)
+            result = await llm.summarize_text(all_text)
             return {"mode": "summarize", "summary": result}
 
         else:
-            result = llm.compare_documents(doc_chunks, question=request.question)
+            result = await llm.compare_documents(doc_chunks, question=request.question)
             return {"mode": "compare", "comparison": result}
 
     except Exception as e:

@@ -9,6 +9,14 @@ let selectedDocument = null;
 let selectedFileForConversion = null;
 let dragCounter = 0;
 
+// Persistent session ID — generated once per page load so memory works across queries
+let SESSION_ID = localStorage.getItem('rag_session_id');
+if (!SESSION_ID) {
+    SESSION_ID = 'sess_' + Math.random().toString(36).substr(2, 16);
+    localStorage.setItem('rag_session_id', SESSION_ID);
+}
+console.log('Session ID:', SESSION_ID);
+
 // Utility functions
 function formatFileSize(bytes) {
     if (bytes === 0) return '0 Bytes';
@@ -105,7 +113,7 @@ function showDocumentLibrary() {
 }
 
 function fetchDocumentsFromBackend() {
-    fetch(`${API_URL}/docs/list`)
+    fetch(`${API_URL}/docs/list?session_id=${encodeURIComponent(SESSION_ID)}`)
         .then(response => response.json())
         .then(data => {
             const docIds = data.doc_ids || [];
@@ -135,21 +143,6 @@ function showTips() {
         '🎤 **Audio files:** Upload audio files and I\'ll transcribe them automatically',
         '🔗 **Web content:** Paste URLs and I\'ll extract and analyze the content'
     ];
-    
-    const tipsMessage = '✨ **Here\'s what I can help you with:**\n\n' + tips.join('\n\n');
-    addMessage('assistant', tipsMessage);
-}
-
-function showTips() {
-    const tips = [
-        '💡 **Upload files:** Click the 📎 button or drag & drop files anywhere in the chat',
-        '🔍 **Ask questions:** Once uploaded, ask me anything about your documents',
-        '🔄 **Convert files:** Upload a file and say "convert this to PDF" or "convert to Word"',
-        '⚖️ **Compare documents:** Upload two files and ask me to compare them',
-        '🎤 **Audio files:** Upload audio files and I\'ll transcribe them automatically',
-        '🔗 **Web content:** Paste URLs and I\'ll extract and analyze the content'
-    ];
-    
     const tipsMessage = '✨ **Here\'s what I can help you with:**\n\n' + tips.join('\n\n');
     addMessage('assistant', tipsMessage);
 }
@@ -410,7 +403,7 @@ function sendMessage() {
     sendButton.disabled = true;
     sendButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Thinking...';
 
-    // Send to API
+    // Send to API — always include session_id so memory works
     fetch(`${API_URL}/query/`, {
         method: 'POST',
         headers: {
@@ -418,6 +411,7 @@ function sendMessage() {
         },
         body: JSON.stringify({
             query: message,
+            session_id: SESSION_ID,
             tts: ttsEnabled.checked,
             top_k: 5
         })
@@ -427,13 +421,18 @@ function sendMessage() {
         const answer = data.answer || 'Sorry, I could not generate a response.';
         addMessage('assistant', answer);
 
-        if (ttsEnabled.checked && data.tts_path) {
-            const audio = new Audio(`${API_URL}${data.tts_path}`);
+        // Show source indicator
+        if (data.fallback_used) {
+            addMessage('assistant', '🌐 _Answer sourced from web search (no matching document found)_');
+        }
+
+        if (ttsEnabled.checked && data.tts_audio_path) {
+            const audio = new Audio(`${API_URL}${data.tts_audio_path}`);
             audio.play().catch(e => console.log('Audio play failed:', e));
         }
     })
     .catch(error => {
-        addMessage('assistant', `Error: ${error.message}`);
+        addMessage('assistant', `⚠️ Error: ${error.message}. Is the server running?`);
     })
     .finally(() => {
         sendButton.disabled = false;
@@ -526,47 +525,42 @@ chatInput.addEventListener('input', function() {
     function handleFileUpload(files) {
         if (files.length === 0) return;
 
-        const formData = new FormData();
-        files.forEach(file => {
-            formData.append('files', file);
+        // Upload each file individually using the 'file' key (matches FastAPI's UploadFile)
+        const uploadPromises = files.map(file => {
+            const formData = new FormData();
+            formData.append('file', file);  // singular 'file' key — matches backend
+            formData.append('session_id', SESSION_ID);
+            return fetch(`${API_URL}/upload/`, {
+                method: 'POST',
+                body: formData
+            }).then(r => r.json());
         });
 
-        // Show upload progress
-        uploadStatus.innerHTML = `
-            <div class="upload-progress">
-                <div class="upload-progress-bar" style="width: 50%;"></div>
-            </div>
-            <div style="margin-top: 10px; color: white;">Uploading ${files.length} file(s)...</div>
-        `;
+        // Show uploading state
+        addMessage('assistant', `⏳ Uploading and processing ${files.length} file(s)…`);
 
-        fetch(`${API_URL}/upload/`, {
-            method: 'POST',
-            body: formData
-        })
-        .then(response => response.json())
-        .then(data => {
-            // Add to recent documents
-            files.forEach(file => {
+        Promise.all(uploadPromises)
+        .then(results => {
+            let totalChunks = 0;
+            results.forEach((data, idx) => {
+                const file = files[idx];
+                totalChunks += data.chunk_count || 0;
                 recentDocuments.push({
                     name: file.name,
                     size: formatFileSize(file.size),
                     type: file.type || 'Unknown',
+                    doc_id: data.doc_id || file.name,
                     uploadedAt: new Date().toISOString(),
-                    path: data.file_paths ? data.file_paths.find(p => p.includes(file.name)) : null
                 });
             });
-            
-            // Add success message to chat
-            const successMsg = `✅ Successfully uploaded ${files.length} file(s)! Processed ${data.chunks_created || 'some'} chunks. You can now ask me questions about these documents!`;
+
+            const successMsg = `✅ Processed ${files.length} file(s) → **${totalChunks} chunks** indexed. You can now ask questions about your document(s)!`;
             addMessage('assistant', successMsg);
-            
-            showNotification(`Successfully uploaded ${files.length} file(s)`, 'success');
-            
-            // Save to localStorage
+            showNotification(`${files.length} file(s) uploaded successfully`, 'success');
             localStorage.setItem('recentDocuments', JSON.stringify(recentDocuments));
         })
         .catch(error => {
-            uploadStatus.innerHTML = `<div class="status-error"><i class="fas fa-times"></i> Upload failed: ${error.message}</div>`;
+            addMessage('assistant', `❌ Upload failed: ${error.message}`);
             showNotification(`Upload failed: ${error.message}`, 'error');
         });
     }
@@ -583,7 +577,7 @@ chatInput.addEventListener('input', function() {
             headers: {
                 'Content-Type': 'application/x-www-form-urlencoded',
             },
-            body: `input_text=${encodeURIComponent(url)}`
+            body: `input_text=${encodeURIComponent(url)}&session_id=${encodeURIComponent(SESSION_ID)}`
         })
         .then(response => response.json())
         .then(data => {
@@ -749,6 +743,7 @@ compareButton.addEventListener('click', () => {
 
         const formData = new FormData();
         formData.append('file', file);
+        formData.append('session_id', SESSION_ID);
 
         transcribeStatus.innerHTML = '<div class="status-info"><i class="fas fa-spinner fa-spin"></i> Transcribing audio...</div>';
 
@@ -784,7 +779,7 @@ function loadDocuments() {
     const documentList = document.getElementById('document-list');
     documentList.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading documents<span class="loading-dots"></span></div>';
 
-    fetch(`${API_URL}/docs/list`)
+    fetch(`${API_URL}/docs/list?session_id=${encodeURIComponent(SESSION_ID)}`)
     .then(response => response.json())
     .then(data => {
         const docIds = data.doc_ids || [];
@@ -825,7 +820,7 @@ function loadDocuments() {
         const documentList = document.getElementById('document-list');
         documentList.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading documents<span class="loading-dots"></span></div>';
 
-        fetch(`${API_URL}/docs/list`)
+        fetch(`${API_URL}/docs/list?session_id=${encodeURIComponent(SESSION_ID)}`)
         .then(response => response.json())
         .then(data => {
             const docIds = data.doc_ids || [];

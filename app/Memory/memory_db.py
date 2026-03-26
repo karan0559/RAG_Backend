@@ -2,17 +2,24 @@ from sentence_transformers import SentenceTransformer
 import chromadb
 import os
 import uuid
+from app.Services.model_loader import get_model
 
 CHROMA_DIR = "data/chroma_memory"
 os.makedirs(CHROMA_DIR, exist_ok=True)
 
+EMBED_MODEL_NAME = "intfloat/e5-large-v2"
+
 client = chromadb.PersistentClient(path=CHROMA_DIR)
 collection = client.get_or_create_collection("chat_memory")
 
-embedding_model = SentenceTransformer("intfloat/e5-large-v2")
+
+def _get_model():
+    return get_model(EMBED_MODEL_NAME)
+
 
 def embed(text: str):
-    return embedding_model.encode([f"query: {text}"])[0].tolist()
+    return _get_model().encode([f"query: {text}"])[0].tolist()
+
 
 def add_to_memory(
     session_id: str,
@@ -35,10 +42,24 @@ def add_to_memory(
         embeddings=[embed(user_input + bot_output)]
     )
 
-def get_recent_history(session_id: str, limit: int = 30):
-    results = collection.get(where={"session_id": session_id})
-    docs = results.get("documents", [])[-limit:]
-    return "\n\n".join(docs)
+
+def get_recent_history(session_id: str, limit: int = 10) -> str:
+    """
+    Retrieve the most recent `limit` conversation turns for a session.
+    Uses where filter so we don't load the entire collection.
+    """
+    try:
+        results = collection.get(
+            where={"session_id": session_id},
+            limit=limit * 2  # fetch a bit more to account for ordering
+        )
+        docs = results.get("documents", [])
+        # Take the last `limit` entries (most recent)
+        recent = docs[-limit:]
+        return "\n\n".join(recent)
+    except Exception:
+        return ""
+
 
 def clear_memory(session_id: str):
     all_ids = collection.get(where={"session_id": session_id}).get("ids", [])

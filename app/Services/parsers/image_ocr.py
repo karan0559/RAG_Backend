@@ -1,13 +1,23 @@
+import os
 import pytesseract
 from PIL import Image
+from dotenv import load_dotenv
 
-pytesseract.pytesseract.tesseract_cmd =r"C:\Program Files\Tesseract-OCR\tesseract.exe"
+load_dotenv()
+
+# Read Tesseract path from .env, fall back to system PATH
+_tesseract_path = os.getenv("TESSERACT_PATH", "")
+if _tesseract_path:
+    pytesseract.pytesseract.tesseract_cmd = _tesseract_path
+# If TESSERACT_PATH is not set, pytesseract will look for 'tesseract' on
+# the system PATH automatically (works on Linux/Mac and Windows if Tesseract
+# is in PATH).
+
 
 def ocr_image(image_path: str) -> str:
     try:
-        print(f" Using Tesseract at: {pytesseract.pytesseract.tesseract_cmd}")
         img = Image.open(image_path)
         text = pytesseract.image_to_string(img)
-        return text if text.strip() else "No readable text found."
+        return text.strip() if text.strip() else "No readable text found."
     except Exception as e:
         return f"OCR failed: {str(e)}"
