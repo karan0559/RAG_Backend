@@ -2,9 +2,11 @@ from sentence_transformers import SentenceTransformer
 import chromadb
 import os
 import uuid
+from pathlib import Path
 from app.Services.model_loader import get_model
 
-CHROMA_DIR = "data/chroma_memory"
+# Absolute path — safe regardless of the directory uvicorn is launched from.
+CHROMA_DIR = str(Path(__file__).resolve().parent.parent.parent / "data" / "chroma_memory")
 os.makedirs(CHROMA_DIR, exist_ok=True)
 
 EMBED_MODEL_NAME = "intfloat/e5-large-v2"

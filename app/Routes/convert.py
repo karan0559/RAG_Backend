@@ -6,7 +6,8 @@ import uuid
 import os
 
 router = APIRouter()
-CONVERTED_DIR = "data/converted_files"
+# Absolute path — safe regardless of the directory uvicorn is launched from.
+CONVERTED_DIR = str(Path(__file__).resolve().parent.parent.parent / "data" / "converted_files")
 os.makedirs(CONVERTED_DIR, exist_ok=True)
 
 @router.post("/", summary="Convert a file to another format")

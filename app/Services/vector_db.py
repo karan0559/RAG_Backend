@@ -2,10 +2,16 @@ import faiss
 import numpy as np
 import os
 import pickle
+from pathlib import Path
+
+# Anchor paths to the project's data/ directory regardless of the working
+# directory that uvicorn is launched from.
+_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+_DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 DIM = 1024
-INDEX_PATH = "data/index.faiss"
-CHUNKS_PATH = "data/chunks.pkl"
+INDEX_PATH = str(_DATA_DIR / "index.faiss")
+CHUNKS_PATH = str(_DATA_DIR / "chunks.pkl")
 
 index = None
 stored_chunks = []

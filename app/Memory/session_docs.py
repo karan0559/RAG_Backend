@@ -1,9 +1,16 @@
 import json
 import os
+import threading
+from pathlib import Path
 from typing import Dict, List, Set
 
+# Protects all reads and writes to SESSION_DOCS_PATH so concurrent upload
+# requests cannot interleave their file I/O and corrupt the JSON file.
+_lock = threading.Lock()
 
-SESSION_DOCS_PATH = "data/session_docs.json"
+# Absolute path — safe regardless of the directory uvicorn is launched from.
+_DATA_DIR = Path(__file__).resolve().parent.parent.parent / "data"
+SESSION_DOCS_PATH = str(_DATA_DIR / "session_docs.json")
 
 
 def _ensure_parent_dir() -> None:
@@ -11,6 +18,7 @@ def _ensure_parent_dir() -> None:
 
 
 def _load_map() -> Dict[str, List[str]]:
+    """Read the session→doc map from disk. Must be called while holding _lock."""
     _ensure_parent_dir()
     if not os.path.exists(SESSION_DOCS_PATH):
         return {}
@@ -31,6 +39,7 @@ def _load_map() -> Dict[str, List[str]]:
 
 
 def _save_map(data: Dict[str, List[str]]) -> None:
+    """Write the session→doc map to disk. Must be called while holding _lock."""
     _ensure_parent_dir()
     with open(SESSION_DOCS_PATH, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=True, indent=2)
@@ -40,14 +49,16 @@ def register_doc(session_id: str, doc_id: str) -> None:
     if not session_id or not doc_id:
         return
 
-    data = _load_map()
-    existing: Set[str] = set(data.get(session_id, []))
-    existing.add(doc_id)
-    data[session_id] = sorted(existing)
-    _save_map(data)
+    with _lock:
+        data = _load_map()
+        existing: Set[str] = set(data.get(session_id, []))
+        existing.add(doc_id)
+        data[session_id] = sorted(existing)
+        _save_map(data)
 
 
 def get_docs(session_id: str) -> List[str]:
     if not session_id:
         return []
-    return _load_map().get(session_id, [])
+    with _lock:
+        return _load_map().get(session_id, [])

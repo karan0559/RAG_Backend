@@ -9,7 +9,8 @@ from app.Services import extractor
 from app.Services import embedder
 from app.Memory import session_docs
 
-UPLOAD_DIR = Path("data/uploads")
+# Absolute path — safe regardless of the directory uvicorn is launched from.
+UPLOAD_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "uploads"
 UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 router = APIRouter()
