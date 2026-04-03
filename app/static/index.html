@@ -595,11 +595,12 @@ document.getElementById('chat-input').addEventListener('input', function(){ adju
 
 // ── File upload ───────────────────────────────────
 async function uploadFiles(files) {
-    if(!files.length) return;
+    const fileList = Array.from(files || []);
+    if(!fileList.length) return;
     const fb = document.getElementById('upload-feedback-sb');
 
     // Show file cards in chat
-    Array.from(files).forEach(f => {
+    fileList.forEach(f => {
         const {ic} = fileIcon(f.name);
         const div = document.createElement('div');
         div.className = 'msg user';
@@ -614,13 +615,13 @@ async function uploadFiles(files) {
     });
 
     addTyping();
-    fb.textContent = `Uploading ${files.length} file(s)…`;
+    fb.textContent = `Uploading ${fileList.length} file(s)…`;
     fb.className = 'upload-feedback show';
 
     let totalChunks = 0;
     const errors = [];
 
-    for(const f of Array.from(files)) {
+    for(const f of fileList) {
         const fd = new FormData();
         fd.append('file', f);
         fd.append('session_id', SID);
@@ -641,9 +642,9 @@ async function uploadFiles(files) {
         toast(`Failed to upload: ${errors.join(', ')}`, 'er');
         addMsg('assistant', `❌ Some files failed to upload: ${errors.join(', ')}`);
     } else {
-        const msg = `✅ Uploaded **${files.length}** file(s) — **${totalChunks} chunks** indexed. You can now ask questions!`;
+        const msg = `✅ Uploaded **${fileList.length}** file(s) — **${totalChunks} chunks** indexed. You can now ask questions!`;
         addMsg('assistant', formatContent(msg), 'doc');
-        toast(`${files.length} file(s) uploaded`, 'ok');
+        toast(`${fileList.length} file(s) uploaded`, 'ok');
         fb.textContent = `✓ ${totalChunks} chunks indexed`;
         setTimeout(()=>{fb.className='upload-feedback';}, 4000);
     }
@@ -651,7 +652,11 @@ async function uploadFiles(files) {
 
 // Attachment button
 document.getElementById('attachment-button').addEventListener('click', () => document.getElementById('file-input').click());
-document.getElementById('file-input').addEventListener('change', e => { uploadFiles(e.target.files); e.target.value=''; });
+document.getElementById('file-input').addEventListener('change', e => {
+    const selectedFiles = Array.from(e.target.files || []);
+    uploadFiles(selectedFiles);
+    e.target.value='';
+});
 
 // Sidebar dropzone
 document.getElementById('sidebar-dropzone').addEventListener('dragover', e => { e.preventDefault(); e.currentTarget.classList.add('over'); });

@@ -18,6 +18,6 @@ def ocr_image(image_path: str) -> str:
     try:
         img = Image.open(image_path)
         text = pytesseract.image_to_string(img)
-        return text.strip() if text.strip() else "No readable text found."
+        return text.strip()
     except Exception as e:
-        return f"OCR failed: {str(e)}"
+        raise RuntimeError(f"OCR failed: {str(e)}")

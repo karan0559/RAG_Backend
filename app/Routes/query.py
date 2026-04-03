@@ -10,6 +10,7 @@ import traceback
 import uuid
 import math
 import re
+import time
 from typing import List, Optional
 import numpy as np
 
@@ -45,6 +46,20 @@ def extract_doc_id(chunk_text: str) -> Optional[str]:
     if "|" not in chunk_text:
         return None
     return chunk_text.split("|", 1)[0].strip()
+
+
+def is_non_usable_chunk(chunk_text: str) -> bool:
+    clean = strip_prefix(chunk_text).strip().lower()
+    if not clean:
+        return True
+    bad_markers = (
+        "ocr failed:",
+        "extraction failed:",
+        "unsupported file type",
+        "unsupported parser output format",
+        "no readable text found",
+    )
+    return any(marker in clean for marker in bad_markers)
 
 
 def is_small_talk(query: str) -> bool:
@@ -114,10 +129,12 @@ def retrieve_scoped_chunks(query: str, allowed_doc_ids: set[str], top_k: int = 2
 @router.post("/", summary="Ask a question over uploaded content")
 async def query_rag(request: Request, body: QueryRequest):
     try:
+        t0 = time.perf_counter()
         session_id = body.session_id or str(uuid.uuid4())
         print(f"\n📨 Query: {body.query!r} | Session: {session_id}")
 
         fallback_used = False
+        fallback_reason = None
         doc_context = ""
         final_chunks = []
         conversational = is_small_talk(body.query)
@@ -125,9 +142,15 @@ async def query_rag(request: Request, body: QueryRequest):
         if not allowed_doc_ids and session_id:
             allowed_doc_ids = set(session_docs.get_docs(session_id))
         has_doc_scope = len(allowed_doc_ids) > 0
+        no_session_docs = bool(session_id) and not has_doc_scope
 
         if conversational:
             print("  💬 Small-talk intent detected → skipping retrieval/web fallback")
+        elif no_session_docs:
+            fallback_used = True
+            fallback_reason = "no_session_docs"
+            print("  ⚠️  No documents registered for this session → web search")
+            doc_context = await web_search.search_web(body.query)
         else:
             # ── Step 1: Check if the vector store has ANY documents ───────────
             vector_db.ensure_loaded()
@@ -140,40 +163,27 @@ async def query_rag(request: Request, body: QueryRequest):
                 print("  ⚠️  Index is empty → web search")
                 doc_context = await web_search.search_web(body.query)
             else:
-                # ── Step 2: Retrieve top-k chunks from FAISS ──────────────────
+                # ── Step 2: Retrieve top-k chunks ──────────────────────────────────
                 try:
-                    retrieval_k = 10
                     if allowed_doc_ids:
-                        # Pull a wider candidate pool when scoping to doc IDs,
-                        # then filter to the session/doc subset.
-                        retrieval_k = max(50, body.top_k * 20)
-                    top_chunks = retriever.retrieve_top_chunks(body.query, top_k=retrieval_k)
-                except Exception as e:
-                    print(f"  Retriever error: {e}")
-                    top_chunks = []
-
-                print(f"  Retrieved {len(top_chunks)} chunks from vector store")
-
-                if allowed_doc_ids:
-                    scoped_chunks = []
-                    for c in top_chunks:
-                        chunk_doc_id = extract_doc_id(c.get("chunk", ""))
-                        if chunk_doc_id and chunk_doc_id in allowed_doc_ids:
-                            scoped_chunks.append(c)
-                    print(
-                        f"  Session/doc scope active: {len(allowed_doc_ids)} docs | "
-                        f"{len(scoped_chunks)} of {len(top_chunks)} chunks kept"
-                    )
-                    top_chunks = scoped_chunks
-
-                    if not top_chunks:
-                        # If ANN top-k missed the session docs, do a strict in-scope pass.
+                        # Directly retrieve chunks strictly scoped to the allowed docs.
+                        # This avoids the sub-selection bug caused by post-filtering the global ANN search.
                         top_chunks = retrieve_scoped_chunks(
                             body.query,
                             allowed_doc_ids=allowed_doc_ids,
                             top_k=max(20, body.top_k * 10),
                         )
-                        print(f"  Scoped fallback retrieved {len(top_chunks)} chunks")
+                        print(f"  Scoped search retrieved {len(top_chunks)} chunks for {len(allowed_doc_ids)} docs")
+                    else:
+                        retrieval_k = max(10, body.top_k * 4)
+                        top_chunks = retriever.retrieve_top_chunks(body.query, top_k=retrieval_k)
+                        print(f"  Global ANN retrieved {len(top_chunks)} chunks")
+                except Exception as e:
+                    print(f"  Retriever error: {e}")
+                    top_chunks = []
+
+                top_chunks = [c for c in top_chunks if not is_non_usable_chunk(c.get("chunk", ""))]
+                print(f"  Kept {len(top_chunks)} chunks after quality filter")
 
                 if top_chunks:
                     # ── Step 3: Strip doc_id prefix before reranking ──────────
@@ -181,8 +191,11 @@ async def query_rag(request: Request, body: QueryRequest):
 
                     # ── Step 4: Rerank ────────────────────────────────────────
                     try:
+                        # Cap reranking work to keep CPU latency predictable.
+                        max_rerank_candidates = min(len(raw_texts_clean), max(12, body.top_k * 4))
+                        rerank_candidates = raw_texts_clean[:max_rerank_candidates]
                         reranked_texts, raw_scores = reranker.rerank(
-                            body.query, raw_texts_clean, top_n=body.top_k
+                            body.query, rerank_candidates, top_n=body.top_k
                         )
                         norm_scores = [sigmoid(float(s)) for s in raw_scores]
                         print(f"  Reranker scores (sigmoid): {[round(s, 3) for s in norm_scores]}")
@@ -211,13 +224,15 @@ async def query_rag(request: Request, body: QueryRequest):
                     fallback_used = False
                 else:
                     if has_doc_scope:
-                        # Session has scoped documents; do not jump to web.
-                        fallback_used = False
-                        print("  ⚠️  No scoped document chunks found; skipping web fallback")
-                        doc_context = "No relevant section found in the currently uploaded session documents."
+                        # If session docs exist but none are relevant/usable, answer from web.
+                        fallback_used = True
+                        fallback_reason = "no_relevant_session_docs"
+                        print("  ⚠️  No scoped document chunks found; falling back to web search")
+                        doc_context = await web_search.search_web(body.query)
                     else:
                         # FAISS returned 0 results (shouldn't happen if index_has_docs)
                         fallback_used = True
+                        fallback_reason = "retrieval_empty"
                         print("  ⚠️  FAISS returned no results despite non-empty index → web search")
                         doc_context = await web_search.search_web(body.query)
 
@@ -234,6 +249,17 @@ async def query_rag(request: Request, body: QueryRequest):
             session_id=session_id,
             use_documents=not conversational,
         )
+
+        if fallback_used and not conversational:
+            if fallback_reason == "no_session_docs":
+                prefix = "No uploaded document was provided for this session. Answering from the web."
+            elif fallback_reason == "no_relevant_session_docs":
+                prefix = "No relevant section was found in uploaded documents. Answering from the web."
+            else:
+                prefix = "Document retrieval returned no usable context. Answering from the web."
+            answer = f"{prefix}\n\n{answer}"
+
+        print(f"  ⏱️ Query total: {time.perf_counter() - t0:.2f}s")
         print(f"  ✅ {answer[:120]}")
 
         # ── Step 8: Optional TTS ──────────────────────────────────────────

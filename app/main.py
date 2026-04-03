@@ -7,8 +7,12 @@ from dotenv import load_dotenv
 import os
 import webbrowser
 
-load_dotenv()
+import sys
 
+if hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -68,3 +72,4 @@ async def root():
     """Serve the chat frontend."""
     html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
     return FileResponse(html_path)
+    #ye dikhra h kya

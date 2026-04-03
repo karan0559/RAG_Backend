@@ -10,10 +10,10 @@ let selectedFileForConversion = null;
 let dragCounter = 0;
 
 // Persistent session ID — generated once per page load so memory works across queries
-let SESSION_ID = localStorage.getItem('rag_session_id');
+let SESSION_ID = sessionStorage.getItem('rag_session_id');
 if (!SESSION_ID) {
     SESSION_ID = 'sess_' + Math.random().toString(36).substr(2, 16);
-    localStorage.setItem('rag_session_id', SESSION_ID);
+    sessionStorage.setItem('rag_session_id', SESSION_ID);
 }
 console.log('Session ID:', SESSION_ID);
 
@@ -557,7 +557,7 @@ chatInput.addEventListener('input', function() {
             const successMsg = `✅ Processed ${files.length} file(s) → **${totalChunks} chunks** indexed. You can now ask questions about your document(s)!`;
             addMessage('assistant', successMsg);
             showNotification(`${files.length} file(s) uploaded successfully`, 'success');
-            localStorage.setItem('recentDocuments', JSON.stringify(recentDocuments));
+            sessionStorage.setItem('recentDocuments', JSON.stringify(recentDocuments));
         })
         .catch(error => {
             addMessage('assistant', `❌ Upload failed: ${error.message}`);
@@ -764,7 +764,7 @@ compareButton.addEventListener('click', () => {
                 path: null
             });
             updateRecentDocuments();
-            localStorage.setItem('recentDocuments', JSON.stringify(recentDocuments));
+            sessionStorage.setItem('recentDocuments', JSON.stringify(recentDocuments));
             
             showNotification('Audio transcribed successfully!', 'success');
         })

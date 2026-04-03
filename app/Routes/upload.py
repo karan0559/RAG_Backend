@@ -48,6 +48,7 @@ async def _process_single_file(file: UploadFile, session_id: Optional[str] = Non
 
     chunks = extractor.extract_content(str(save_path), file_type)
     doc_id = filename.rsplit(".", 1)[0]
+    extraction_warning = None
 
     if isinstance(chunks, list) and chunks:
         embeddings = embedder.embed_chunks(chunks, doc_id=doc_id)
@@ -55,12 +56,14 @@ async def _process_single_file(file: UploadFile, session_id: Optional[str] = Non
             session_docs.register_doc(session_id=session_id, doc_id=doc_id)
         print(f"  ✅ Embedded {len(chunks)} chunks for '{doc_id}'")
     else:
-        chunks = [chunks] if isinstance(chunks, str) else []
+        chunks = []
         embeddings = []
+        extraction_warning = "No usable text extracted from file; nothing was indexed."
         print(f"  ⚠️  No valid chunks for '{doc_id}'")
 
     return {
         "id": uid,
+        "session_id": session_id,
         "doc_id": doc_id,
         "original_filename": filename,
         "file_type": file_type,
@@ -68,6 +71,7 @@ async def _process_single_file(file: UploadFile, session_id: Optional[str] = Non
         "chunk_count": len(chunks),
         "embedding_shape": str(getattr(embeddings, "shape", f"{len(embeddings)} x dim")),
         "text_preview": chunks[:3],
+        "warning": extraction_warning,
     }
 
 
