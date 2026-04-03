@@ -7,6 +7,8 @@ from app.Memory import memory_db
 load_dotenv()
 
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+# Default to the more capable 70b model for better reasoning quality.
+# Set GROQ_MODEL=llama-3.1-8b-instant in .env for a faster / cheaper alternative.
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
@@ -53,26 +55,46 @@ async def answer_question(
     question: str,
     session_id: Optional[str] = None,
     use_documents: bool = True,
+    context_source: Optional[str] = None,  # "doc", "web", or None (small-talk)
 ) -> str:
     """
     Answer a user question, injecting memory from previous interactions.
     Saves the turn to memory after answering (only once — callers must NOT save again).
+
+    context_source controls how the system prompt frames the provided context:
+      "doc"  → context comes from the user's uploaded documents
+      "web"  → context comes from a live web search
+      None   → conversational / no context needed
     """
     memory_context = ""
     if session_id:
         memory_context = memory_db.get_recent_history(session_id, limit=10)
 
     if use_documents:
-        system_prompt = (
-            "You are a helpful assistant. "
-            "Answer questions using the provided document context. "
-            "If the context contains the answer, use it. "
-            "If the context is missing or insufficient, say that clearly and ask a short follow-up. "
-            "Be concise and accurate."
-        )
+        if context_source == "web":
+            # Context was retrieved from the web — tell the LLM explicitly so it
+            # doesn't present web results as if they came from the user's documents.
+            system_prompt = (
+                "You are a helpful assistant. "
+                "The context below was retrieved from a live web search, NOT from any "
+                "uploaded document. "
+                "Answer the user's question using this web-sourced context. "
+                "If the context is insufficient, say so clearly. "
+                "Do NOT claim the information comes from a document the user uploaded. "
+                "Be concise and accurate."
+            )
+        else:
+            # Default: context comes from the user's uploaded documents.
+            system_prompt = (
+                "You are a helpful assistant. "
+                "Answer questions using the provided document context. "
+                "If the context contains the answer, use it. "
+                "If the context is missing or insufficient, say that clearly and ask a short follow-up. "
+                "Be concise and accurate."
+            )
         user_prompt = (
             f"Conversation History:\n{memory_context or 'None'}\n\n"
-            f"Document Context:\n{context or 'None'}\n\n"
+            f"{'Web Search' if context_source == 'web' else 'Document'} Context:\n{context or 'None'}\n\n"
             f"Question:\n{question}"
         )
     else:

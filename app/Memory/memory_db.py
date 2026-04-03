@@ -1,6 +1,7 @@
 from sentence_transformers import SentenceTransformer
 import chromadb
 import os
+import time
 import uuid
 from pathlib import Path
 from app.Services.model_loader import get_model
@@ -32,7 +33,10 @@ def add_to_memory(
 ):
     metadata = {
         "session_id": session_id,
-        "source": source
+        "source": source,
+        # Store creation time so we can sort by it later; ChromaDB does not
+        # guarantee retrieval order, so we enforce it ourselves.
+        "created_at": time.time(),
     }
     if context_snippet:
         metadata["context"] = context_snippet[:1000]
@@ -47,18 +51,33 @@ def add_to_memory(
 
 def get_recent_history(session_id: str, limit: int = 10) -> str:
     """
-    Retrieve the most recent `limit` conversation turns for a session.
-    Uses where filter so we don't load the entire collection.
+    Retrieve the most recent `limit` conversation turns for a session in
+    chronological order.
+
+    ChromaDB's collection.get() does NOT guarantee insertion / time order, so
+    we store a `created_at` unix timestamp in metadata at write time and sort
+    here before slicing to `limit`.
     """
     try:
         results = collection.get(
             where={"session_id": session_id},
-            limit=limit * 2  # fetch a bit more to account for ordering
+            limit=limit * 2,  # fetch extra to account for sorting + slicing
+            include=["documents", "metadatas"],
         )
         docs = results.get("documents", [])
-        # Take the last `limit` entries (most recent)
-        recent = docs[-limit:]
-        return "\n\n".join(recent)
+        metas = results.get("metadatas", [])
+
+        if not docs:
+            return ""
+
+        # Pair each document with its timestamp, sort ascending (oldest first),
+        # then take the last `limit` turns so the most recent are always included.
+        paired = sorted(
+            zip(metas, docs),
+            key=lambda x: float(x[0].get("created_at", 0)),
+        )
+        recent_docs = [doc for _, doc in paired[-limit:]]
+        return "\n\n".join(recent_docs)
     except Exception:
         return ""
 

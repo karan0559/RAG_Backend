@@ -25,7 +25,17 @@ class QueryRequest(BaseModel):
     doc_ids: Optional[List[str]] = None
 
 
-reranker = Reranker()
+# Lazy singleton — loaded on first use so a missing/undownloaded model does
+# not crash the server at startup.  The reranker error path in query_rag()
+# already falls back gracefully to FAISS order if reranking fails.
+_reranker: Reranker | None = None
+
+
+def _get_reranker() -> Reranker:
+    global _reranker
+    if _reranker is None:
+        _reranker = Reranker()
+    return _reranker
 
 
 def sigmoid(x: float) -> float:
@@ -62,12 +72,26 @@ def is_non_usable_chunk(chunk_text: str) -> bool:
     return any(marker in clean for marker in bad_markers)
 
 
+# Minimum reranker confidence (sigmoid-normalised) required for a chunk to be
+# considered "found in documents".  Scores below this trigger web fallback even
+# when the vector store returns results, preventing irrelevant doc chunks from
+# suppressing the web-search path for off-topic queries.
+MIN_RELEVANCE_SCORE = 0.40
+
+
 def is_small_talk(query: str) -> bool:
-    """Fast heuristic intent gate for greetings and short conversational turns."""
+    """
+    Strict heuristic gate for pure greetings / one-word social phrases.
+
+    Intentionally narrow: only exact matches or very short prefix patterns so
+    that substantive questions (e.g. "Hey, what is quantum computing?") are NOT
+    classified as small-talk and still get document/web context.
+    """
     normalized = re.sub(r"[^a-z0-9\s]", "", query.lower()).strip()
     if not normalized:
         return True
 
+    # Only single-token or very short fixed phrases qualify
     small_talk_exact = {
         "hi",
         "hello",
@@ -83,9 +107,21 @@ def is_small_talk(query: str) -> bool:
         "thank you",
         "ok",
         "okay",
+        "bye",
+        "goodbye",
+        "see you",
+        "great",
+        "nice",
+        "cool",
     }
     if normalized in small_talk_exact:
         return True
+
+    # Guard: only treat as small-talk if the full query is very short (≤5 words)
+    # so that "Hey, tell me about machine learning" still goes through retrieval.
+    word_count = len(normalized.split())
+    if word_count > 5:
+        return False
 
     small_talk_prefixes = (
         "hi ",
@@ -93,7 +129,6 @@ def is_small_talk(query: str) -> bool:
         "hey ",
         "thanks ",
         "thank you ",
-        "how are you ",
     )
     return normalized.startswith(small_talk_prefixes)
 
@@ -130,25 +165,36 @@ def retrieve_scoped_chunks(query: str, allowed_doc_ids: set[str], top_k: int = 2
 async def query_rag(request: Request, body: QueryRequest):
     try:
         t0 = time.perf_counter()
+        # Always produce a usable session ID; None is treated as "no session"
         session_id = body.session_id or str(uuid.uuid4())
         print(f"\n📨 Query: {body.query!r} | Session: {session_id}")
 
         fallback_used = False
         fallback_reason = None
         doc_context = ""
+        context_source = "doc"   # tracks whether context came from docs or web
         final_chunks = []
         conversational = is_small_talk(body.query)
+
+        # Resolve which doc IDs are in scope for this query
         allowed_doc_ids = set(body.doc_ids or [])
-        if not allowed_doc_ids and session_id:
-            allowed_doc_ids = set(session_docs.get_docs(session_id))
+        if not allowed_doc_ids and body.session_id:  # only look up if caller sent a session
+            allowed_doc_ids = set(session_docs.get_docs(body.session_id))
         has_doc_scope = len(allowed_doc_ids) > 0
-        no_session_docs = bool(session_id) and not has_doc_scope
+
+        # Trigger web search when:
+        #  a) caller provided NO session_id at all (anonymous query), or
+        #  b) a session_id was given but it has no registered documents.
+        # Previously this used `bool(session_id)` which would never be False
+        # because we always generate a UUID above — fixed by checking body.session_id.
+        no_session_docs = (body.session_id is None) or (body.session_id and not has_doc_scope)
 
         if conversational:
             print("  💬 Small-talk intent detected → skipping retrieval/web fallback")
         elif no_session_docs:
             fallback_used = True
             fallback_reason = "no_session_docs"
+            context_source = "web"
             print("  ⚠️  No documents registered for this session → web search")
             doc_context = await web_search.search_web(body.query)
         else:
@@ -160,6 +206,7 @@ async def query_rag(request: Request, body: QueryRequest):
             if not index_has_docs:
                 # No documents uploaded at all → use web search
                 fallback_used = True
+                context_source = "web"
                 print("  ⚠️  Index is empty → web search")
                 doc_context = await web_search.search_web(body.query)
             else:
@@ -194,7 +241,7 @@ async def query_rag(request: Request, body: QueryRequest):
                         # Cap reranking work to keep CPU latency predictable.
                         max_rerank_candidates = min(len(raw_texts_clean), max(12, body.top_k * 4))
                         rerank_candidates = raw_texts_clean[:max_rerank_candidates]
-                        reranked_texts, raw_scores = reranker.rerank(
+                        reranked_texts, raw_scores = _get_reranker().rerank(
                             body.query, rerank_candidates, top_n=body.top_k
                         )
                         norm_scores = [sigmoid(float(s)) for s in raw_scores]
@@ -216,23 +263,45 @@ async def query_rag(request: Request, body: QueryRequest):
                             final_chunks.append(original)
                             print(f"  🔹 Score={norm_score:.3f} | {reranked_text[:100]}")
 
-                    # ── Step 6: Build document context ────────────────────────
-                    # If document chunks were found, stay strictly document-first.
-                    doc_context = "\n\n".join(
-                        strip_prefix(c["chunk"]) for c in final_chunks
-                    )
-                    fallback_used = False
+                    # ── Step 6: Relevance gate — score threshold check ────────
+                    # FAISS + reranker always return *something* from the index
+                    # even for completely unrelated queries.  We only accept doc
+                    # chunks when the best sigmoid-normalised reranker score
+                    # clears MIN_RELEVANCE_SCORE (default 0.40).  Below that the
+                    # retrieved chunks are likely noise → fall back to web.
+                    best_score = max(norm_scores) if norm_scores else 0.0
+                    print(f"  Best reranker score: {best_score:.3f} (threshold={MIN_RELEVANCE_SCORE})")
+
+                    if best_score >= MIN_RELEVANCE_SCORE:
+                        # Chunks are sufficiently relevant — build doc context.
+                        doc_context = "\n\n".join(
+                            strip_prefix(c["chunk"]) for c in final_chunks
+                        )
+                        fallback_used = False
+                        context_source = "doc"
+                    else:
+                        # Chunks exist but are not relevant to this query.
+                        fallback_used = True
+                        fallback_reason = "low_relevance"
+                        context_source = "web"
+                        print(
+                            f"  ⚠️  Best score {best_score:.3f} < {MIN_RELEVANCE_SCORE} "
+                            "→ chunks not relevant, falling back to web search"
+                        )
+                        doc_context = await web_search.search_web(body.query)
                 else:
                     if has_doc_scope:
-                        # If session docs exist but none are relevant/usable, answer from web.
+                        # Session docs exist but retrieval returned nothing usable.
                         fallback_used = True
                         fallback_reason = "no_relevant_session_docs"
+                        context_source = "web"
                         print("  ⚠️  No scoped document chunks found; falling back to web search")
                         doc_context = await web_search.search_web(body.query)
                     else:
                         # FAISS returned 0 results (shouldn't happen if index_has_docs)
                         fallback_used = True
                         fallback_reason = "retrieval_empty"
+                        context_source = "web"
                         print("  ⚠️  FAISS returned no results despite non-empty index → web search")
                         doc_context = await web_search.search_web(body.query)
 
@@ -248,15 +317,20 @@ async def query_rag(request: Request, body: QueryRequest):
             question=body.query,
             session_id=session_id,
             use_documents=not conversational,
+            # Tell the LLM where the context came from so it can frame its answer
+            # correctly ("according to the document" vs "according to the web").
+            context_source=context_source if not conversational else None,
         )
 
         if fallback_used and not conversational:
             if fallback_reason == "no_session_docs":
-                prefix = "No uploaded document was provided for this session. Answering from the web."
+                prefix = "🌐 No uploaded document was provided for this session. Answering from the web."
             elif fallback_reason == "no_relevant_session_docs":
-                prefix = "No relevant section was found in uploaded documents. Answering from the web."
+                prefix = "🌐 No relevant section was found in your uploaded documents. Answering from the web."
+            elif fallback_reason == "low_relevance":
+                prefix = "🌐 The documents don't seem to cover this topic. Answering from the web."
             else:
-                prefix = "Document retrieval returned no usable context. Answering from the web."
+                prefix = "🌐 Document retrieval returned no usable context. Answering from the web."
             answer = f"{prefix}\n\n{answer}"
 
         print(f"  ⏱️ Query total: {time.perf_counter() - t0:.2f}s")

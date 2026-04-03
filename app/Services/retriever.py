@@ -13,9 +13,9 @@ def retrieve_top_chunks(query: str, top_k: int = 5) -> List[Dict]:
     vector_db.ensure_loaded()
     results = vector_db.search(query_vector=query_embedding, top_k=top_k)
 
-    if not results:
-        raise ValueError("Vector index not found or empty.")
-
+    # Empty results are a valid outcome (e.g. index has docs but none match
+    # the query well enough).  Return [] so the caller can decide to fall back
+    # to web search — no exception needed here.
     return results
 
 

@@ -430,10 +430,40 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--t1);height
 // ═══════════════════════════════════════
 const API = 'http://127.0.0.1:8000';
 
-// Persistent session
-let SID = localStorage.getItem('rag_sid');
-if (!SID) { SID = 'sid_' + Math.random().toString(36).substr(2,14); localStorage.setItem('rag_sid', SID); }
+// ── Session ID with TTL ────────────────────────────────────────────────────
+// We store the SID alongside a creation timestamp.  If the session is older
+// than SESSION_TTL_MS (default 24 h) we create a fresh one so that stale
+// document associations from previous days don't silently persist.
+const SESSION_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
 
+function loadOrCreateSID() {
+    const stored = localStorage.getItem('rag_sid');
+    const ts     = parseInt(localStorage.getItem('rag_sid_ts') || '0', 10);
+    const now    = Date.now();
+
+    if (stored && (now - ts) < SESSION_TTL_MS) {
+        // Existing session is still within TTL — reuse it.
+        return stored;
+    }
+
+    // Session expired or doesn't exist — create a fresh one.
+    if (stored) {
+        // Best-effort: tell the backend to clear the old session's doc scope.
+        fetch(`${API}/docs/clear_session`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ session_id: stored }),
+        }).catch(() => {}); // fire-and-forget, don't block UI
+    }
+
+    const newSID = 'sid_' + Math.random().toString(36).substr(2, 14);
+    localStorage.setItem('rag_sid', newSID);
+    localStorage.setItem('rag_sid_ts', String(now));
+    localStorage.setItem('rag_docs', '[]'); // reset local doc list too
+    return newSID;
+}
+
+let SID = loadOrCreateSID();
 let uploadedDocs = JSON.parse(localStorage.getItem('rag_docs') || '[]');
 let dragN = 0;
 let msgCount = 0;
@@ -540,11 +570,28 @@ function formatContent(txt) {
 }
 
 function clearChat() {
+    // Tell the backend to forget this session's document associations.
+    fetch(`${API}/docs/clear_session`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ session_id: SID }),
+    }).catch(() => {}); // fire-and-forget
+
+    // Generate a brand-new session ID so the next query starts completely fresh.
+    SID = 'sid_' + Math.random().toString(36).substr(2, 14);
+    localStorage.setItem('rag_sid', SID);
+    localStorage.setItem('rag_sid_ts', String(Date.now()));
+
+    // Reset local doc list
+    uploadedDocs = [];
+    localStorage.setItem('rag_docs', '[]');
+    refreshDocList();
+
     const chat = document.getElementById('chat-container');
     chat.innerHTML = `<div class="welcome" id="welcome-state">
         <div class="welcome-icon">🤖</div>
         <h2>What can I help you with?</h2>
-        <p>Upload a document in the sidebar, then ask me anything about it.</p>
+        <p>Upload a document in the sidebar, then ask me anything about it. I can also answer general questions by searching the web.</p>
         <div class="chips">
             <div class="chip" onclick="setInput('Summarize the uploaded document')">📄 Summarize</div>
             <div class="chip" onclick="setInput('What are the key points in this document?')">🔑 Key Points</div>

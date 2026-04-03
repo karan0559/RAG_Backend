@@ -72,4 +72,3 @@ async def root():
     """Serve the chat frontend."""
     html_path = os.path.join(os.path.dirname(__file__), "static", "index.html")
     return FileResponse(html_path)
-    #ye dikhra h kya
