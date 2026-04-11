@@ -5,8 +5,7 @@ from pathlib import Path
 import os
 import uuid
 
-from app.Services import extractor
-from app.Services import embedder
+from app.Services import extractor, embedder, llm
 from app.Memory import session_docs
 
 # Absolute path — safe regardless of the directory uvicorn is launched from.
@@ -28,9 +27,63 @@ EXT_TO_TYPE = {
     ".webm": "audio",
 }
 
+# How many chunks / chars to feed the summariser.
+# Keeps the prompt well within the LLM context window.
+_SUMMARY_MAX_CHUNKS = 30
+_SUMMARY_MAX_CHARS  = 6000
+
+
+async def _summarise_chunks(chunks: list, label: str) -> Optional[str]:
+    """
+    Generate a plain-language summary from the first N chunks of a document.
+
+    Returns None silently on failure so the upload still succeeds even if
+    the LLM is unavailable or rate-limited.
+
+    The summary includes:
+      - A short overview of what the file contains (3-5 sentences)
+      - 3-5 example questions the user can ask, as a bullet list
+
+    This is displayed in the chat right after upload so the user immediately
+    knows what's in the file without having to guess search terms.
+    """
+    if not chunks:
+        return None
+
+    sample_text = "\n\n".join(chunks[:_SUMMARY_MAX_CHUNKS])[:_SUMMARY_MAX_CHARS]
+    try:
+        payload = {
+            "model": llm.GROQ_MODEL,
+            "temperature": 0.4,
+            "max_tokens": 512,
+            "messages": [
+                {
+                    "role": "system",
+                    "content": (
+                        "You are a helpful document assistant. "
+                        "When given the content of a file, provide a concise summary (3-5 sentences) "
+                        "covering what the file is about and its main topics. "
+                        "Then suggest 3-5 specific questions the user could ask about this content. "
+                        "Format the questions as a bullet list starting with •"
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": (
+                        f"File: {label}\n\nContent:\n{sample_text}\n\n"
+                        "Please summarise this and suggest questions I can ask."
+                    ),
+                },
+            ],
+        }
+        return await llm.call_groq_llm(payload)
+    except Exception as e:
+        print(f"  ⚠️  Auto-summary failed for '{label}': {e}")
+        return None
+
 
 async def _process_single_file(file: UploadFile, session_id: Optional[str] = None) -> dict:
-    """Save, extract, embed a single uploaded file. Returns result dict."""
+    """Save, extract, embed, and auto-summarise a single uploaded file."""
     filename = file.filename
     ext = os.path.splitext(filename)[1].lower()
     file_type = EXT_TO_TYPE.get(ext)
@@ -49,15 +102,21 @@ async def _process_single_file(file: UploadFile, session_id: Optional[str] = Non
     chunks = extractor.extract_content(str(save_path), file_type)
     doc_id = filename.rsplit(".", 1)[0]
     extraction_warning = None
+    summary = None
 
     if isinstance(chunks, list) and chunks:
-        embeddings = embedder.embed_chunks(chunks, doc_id=doc_id)
+        embedder.embed_chunks(chunks, doc_id=doc_id)
         if session_id:
             session_docs.register_doc(session_id=session_id, doc_id=doc_id)
         print(f"  ✅ Embedded {len(chunks)} chunks for '{doc_id}'")
+
+        # Auto-summarise immediately so the user knows what's in the file
+        # and can ask relevant questions without guessing keywords.
+        summary = await _summarise_chunks(chunks, label=filename)
+        if summary:
+            print(f"  📝 Auto-summary generated for '{doc_id}'")
     else:
         chunks = []
-        embeddings = []
         extraction_warning = "No usable text extracted from file; nothing was indexed."
         print(f"  ⚠️  No valid chunks for '{doc_id}'")
 
@@ -69,8 +128,7 @@ async def _process_single_file(file: UploadFile, session_id: Optional[str] = Non
         "file_type": file_type,
         "saved_path": str(save_path),
         "chunk_count": len(chunks),
-        "embedding_shape": str(getattr(embeddings, "shape", f"{len(embeddings)} x dim")),
-        "text_preview": chunks[:3],
+        "summary": summary,          # None if extraction failed or LLM unavailable
         "warning": extraction_warning,
     }
 
@@ -103,11 +161,13 @@ async def upload_file_or_input(
             chunks = extractor.extract_content(input_text, file_type)
             doc_id = input_text
             uid = str(uuid.uuid4())
+            summary = None
 
             if isinstance(chunks, list) and chunks:
                 embedder.embed_chunks(chunks, doc_id=doc_id)
                 if session_id:
                     session_docs.register_doc(session_id=session_id, doc_id=doc_id)
+                summary = await _summarise_chunks(chunks, label=input_text)
 
             return JSONResponse({
                 "id": uid,
@@ -116,13 +176,12 @@ async def upload_file_or_input(
                 "file_type": file_type,
                 "saved_path": "N/A",
                 "chunk_count": len(chunks) if isinstance(chunks, list) else 1,
-                "text_preview": chunks[:3] if isinstance(chunks, list) else [chunks],
+                "summary": summary,
             })
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"URL processing failed: {e}")
 
     # ── File upload(s) ─────────────────────────────────────────────────────
-    # Normalise: accept both 'file' (single) and 'files' (multiple) keys
     all_files: List[UploadFile] = []
     if files:
         all_files.extend(files)
@@ -157,6 +216,5 @@ async def upload_file_or_input(
         "files_failed": len(errors),
         "results": results,
         "errors": errors,
-        # Aggregate stats
         "chunks_created": sum(r["chunk_count"] for r in results),
     })

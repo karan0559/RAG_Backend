@@ -667,6 +667,7 @@ async function uploadFiles(files) {
 
     let totalChunks = 0;
     const errors = [];
+    const summaries = []; // collect per-file summaries
 
     for(const f of fileList) {
         const fd = new FormData();
@@ -678,6 +679,7 @@ async function uploadFiles(files) {
             if(!r.ok) { errors.push(f.name); continue; }
             totalChunks += d.chunk_count || 0;
             uploadedDocs.push({name:f.name, size:fmtSize(f.size), chunks:d.chunk_count, doc_id:d.doc_id});
+            if(d.summary) summaries.push({name: f.name, text: d.summary, chunks: d.chunk_count});
         } catch(e) { errors.push(f.name); }
     }
 
@@ -688,7 +690,21 @@ async function uploadFiles(files) {
     if(errors.length) {
         toast(`Failed to upload: ${errors.join(', ')}`, 'er');
         addMsg('assistant', `❌ Some files failed to upload: ${errors.join(', ')}`);
+    } else if(summaries.length > 0) {
+        // Show a rich summary bubble for each file that has one
+        summaries.forEach(s => {
+            const header = `✅ **${s.name}** indexed (${s.chunks} chunks)\n\n📋 **Summary**\n\n${s.text}`;
+            addMsg('assistant', formatContent(header), 'doc');
+        });
+        // If some files had no summary (extraction may have failed), note them
+        if(summaries.length < fileList.length - errors.length) {
+            addMsg('assistant', formatContent(`⚠️ Some files had no extractable text and were not indexed.`));
+        }
+        toast(`${fileList.length} file(s) uploaded`, 'ok');
+        fb.textContent = `✓ ${totalChunks} chunks indexed`;
+        setTimeout(()=>{fb.className='upload-feedback';}, 4000);
     } else {
+        // Fallback: no summaries available (LLM unavailable or empty files)
         const msg = `✅ Uploaded **${fileList.length}** file(s) — **${totalChunks} chunks** indexed. You can now ask questions!`;
         addMsg('assistant', formatContent(msg), 'doc');
         toast(`${fileList.length} file(s) uploaded`, 'ok');
@@ -730,7 +746,12 @@ document.getElementById('upload-url-button').addEventListener('click', async () 
         if(!r.ok) { addMsg('assistant','❌ URL processing failed'); return; }
         uploadedDocs.push({name:url.slice(0,40)+'…', chunks:d.chunk_count, doc_id:d.doc_id});
         refreshDocList();
-        addMsg('assistant', `✅ URL processed — **${d.chunk_count||0} chunks** indexed.`, 'doc');
+        if(d.summary) {
+            const header = `✅ URL indexed (${d.chunk_count||0} chunks)\n\n📋 **Summary**\n\n${d.summary}`;
+            addMsg('assistant', formatContent(header), 'doc');
+        } else {
+            addMsg('assistant', formatContent(`✅ URL processed — **${d.chunk_count||0} chunks** indexed.`), 'doc');
+        }
         document.getElementById('url-input').value='';
         toast('URL processed!','ok');
     } catch(e) { removeTyping(); addMsg('assistant','❌ Failed to reach server.'); }
