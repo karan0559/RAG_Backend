@@ -20,6 +20,10 @@ class Reranker:
         if not passages:
             return [], []
 
+        # Pre-truncate to ~450 words so the tokenizer doesn't cut off
+        # important content mid-sentence at the 512-token limit.
+        passages = [" ".join(p.split()[:450]) for p in passages]
+
         all_scores = []
         for i in range(0, len(passages), batch_size):
             batch = passages[i:i + batch_size]
@@ -43,5 +47,6 @@ class Reranker:
         scores_tensor = torch.stack(all_scores) if isinstance(all_scores[0], torch.Tensor) else torch.tensor(all_scores)
 
         sorted_indices = torch.argsort(scores_tensor, descending=True)
-        reranked = [passages[i] for i in sorted_indices[:top_n]]
-        return reranked, scores_tensor[sorted_indices[:top_n]].tolist()
+        top_indices = sorted_indices[:top_n].tolist()
+        reranked = [passages[i] for i in top_indices]
+        return reranked, scores_tensor[sorted_indices[:top_n]].tolist(), top_indices

@@ -89,6 +89,7 @@ async def answer_question(
                 "You are a helpful assistant. "
                 "Answer questions using the provided document context. "
                 "If the context contains the answer, use it. "
+                "Use specific terms, names, and numbers from the document context in your answer. "
                 "If the context is missing or insufficient, say that clearly and ask a short follow-up. "
                 "Be concise and accurate."
             )

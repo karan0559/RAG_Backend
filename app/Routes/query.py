@@ -76,7 +76,7 @@ def is_non_usable_chunk(chunk_text: str) -> bool:
 # considered "found in documents".  Scores below this trigger web fallback even
 # when the vector store returns results, preventing irrelevant doc chunks from
 # suppressing the web-search path for off-topic queries.
-MIN_RELEVANCE_SCORE = 0.40
+MIN_RELEVANCE_SCORE = 0.20
 
 
 def is_small_talk(query: str) -> bool:
@@ -182,22 +182,31 @@ async def query_rag(request: Request, body: QueryRequest):
             allowed_doc_ids = set(session_docs.get_docs(body.session_id))
         has_doc_scope = len(allowed_doc_ids) > 0
 
-        # Trigger web search when:
-        #  a) caller provided NO session_id at all (anonymous query), or
-        #  b) a session_id was given but it has no registered documents.
-        # Previously this used `bool(session_id)` which would never be False
-        # because we always generate a UUID above — fixed by checking body.session_id.
+        # Check whether the caller has session-scoped documents.
+        # Even if no session docs are registered, we still check the FAISS
+        # index — the user may have uploaded documents without a session.
         no_session_docs = (body.session_id is None) or (body.session_id and not has_doc_scope)
 
         if conversational:
             print("  💬 Small-talk intent detected → skipping retrieval/web fallback")
         elif no_session_docs:
-            fallback_used = True
-            fallback_reason = "no_session_docs"
-            context_source = "web"
-            print("  ⚠️  No documents registered for this session → web search")
-            doc_context = await web_search.search_web(body.query)
-        else:
+            # No session docs, but the FAISS index may still have documents.
+            # Check the index first before falling back to web search.
+            vector_db.ensure_loaded()
+            index_has_docs = (vector_db.index is not None and vector_db.index.ntotal > 0)
+            if not index_has_docs:
+                fallback_used = True
+                fallback_reason = "no_session_docs"
+                context_source = "web"
+                print("  ⚠️  No documents registered and index is empty → web search")
+                doc_context = await web_search.search_web(body.query)
+            else:
+                # Index has documents — treat as a global search (no doc_id scoping).
+                print(f"  ℹ️  No session docs, but index has {vector_db.index.ntotal} vectors → searching index")
+                allowed_doc_ids = set()  # clear any scope — search everything
+                no_session_docs = False  # flag: will enter retrieval below
+
+        if not conversational and not no_session_docs and not fallback_used and not doc_context:
             # ── Step 1: Check if the vector store has ANY documents ───────────
             vector_db.ensure_loaded()
             index_has_docs = (vector_db.index is not None and vector_db.index.ntotal > 0)
@@ -223,7 +232,7 @@ async def query_rag(request: Request, body: QueryRequest):
                         print(f"  Scoped search retrieved {len(top_chunks)} chunks for {len(allowed_doc_ids)} docs")
                     else:
                         retrieval_k = max(10, body.top_k * 4)
-                        top_chunks = retriever.retrieve_top_chunks(body.query, top_k=retrieval_k)
+                        top_chunks = retriever.hybrid_retrieve(body.query, top_k=retrieval_k)
                         print(f"  Global ANN retrieved {len(top_chunks)} chunks")
                 except Exception as e:
                     print(f"  Retriever error: {e}")
@@ -241,7 +250,7 @@ async def query_rag(request: Request, body: QueryRequest):
                         # Cap reranking work to keep CPU latency predictable.
                         max_rerank_candidates = min(len(raw_texts_clean), max(12, body.top_k * 4))
                         rerank_candidates = raw_texts_clean[:max_rerank_candidates]
-                        reranked_texts, raw_scores = _get_reranker().rerank(
+                        reranked_texts, raw_scores, rerank_indices = _get_reranker().rerank(
                             body.query, rerank_candidates, top_n=body.top_k
                         )
                         norm_scores = [sigmoid(float(s)) for s in raw_scores]
@@ -250,18 +259,13 @@ async def query_rag(request: Request, body: QueryRequest):
                         print(f"  Reranker error: {e} — using FAISS order")
                         reranked_texts = raw_texts_clean[:body.top_k]
                         norm_scores = [1.0] * len(reranked_texts)
+                        rerank_indices = list(range(len(reranked_texts)))
 
-                    # ── Step 5: Map back to original chunk objects ────────────
-                    clean_to_original = {}
-                    for i in range(len(top_chunks)):
-                        clean_to_original.setdefault(raw_texts_clean[i], []).append(top_chunks[i])
-
-                    for reranked_text, norm_score in zip(reranked_texts, norm_scores):
-                        candidates = clean_to_original.get(reranked_text, [])
-                        original = candidates.pop(0) if candidates else None
-                        if original:
-                            final_chunks.append(original)
-                            print(f"  🔹 Score={norm_score:.3f} | {reranked_text[:100]}")
+                    # ── Step 5: Map back to original chunk objects via indices ─
+                    for idx, norm_score in zip(rerank_indices, norm_scores):
+                        if idx < len(top_chunks):
+                            final_chunks.append(top_chunks[idx])
+                            print(f"  🔹 Score={norm_score:.3f} | {raw_texts_clean[idx][:100]}")
 
                     # ── Step 6: Relevance gate — score threshold check ────────
                     # FAISS + reranker always return *something* from the index
