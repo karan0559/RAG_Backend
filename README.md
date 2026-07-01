@@ -13,6 +13,8 @@ pinned: false
 A **modular, multimodal Retrieval-Augmented Generation (RAG) backend** built with FastAPI, FAISS, and Groq-hosted LLaMA3.  
 Supports document understanding across **PDFs, DOCX, images, audio, web URLs, and YouTube** — with session memory, reranking, TTS, web fallback, file conversion, and a validated retrieval pipeline.
 
+**🚀 Live demo:** [karan-0559-rag-system.hf.space](https://karan-0559-rag-system.hf.space) — hosted on [Hugging Face Spaces](https://huggingface.co/spaces/Karan-0559/Rag_system) (Docker). Storage is ephemeral on the free tier, so uploaded documents reset when the Space restarts or sleeps from inactivity.
+
 ---
 
 ## 🚀 Features
