@@ -1,0 +1,12 @@
+data/
+.git/
+.idea/
+__pycache__/
+**/__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+validation_results/
+noisy.png
+.pytest_cache/

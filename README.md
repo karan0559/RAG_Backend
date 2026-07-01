@@ -1,3 +1,13 @@
+---
+title: Smart RAG System
+emoji: 🤖
+colorFrom: purple
+colorTo: blue
+sdk: docker
+app_port: 7860
+pinned: false
+---
+
 # 🧠 Smart RAG System
 
 A **modular, multimodal Retrieval-Augmented Generation (RAG) backend** built with FastAPI, FAISS, and Groq-hosted LLaMA3.  
@@ -186,6 +196,20 @@ uvicorn app.main:app --reload
 
 The API will be available at `http://localhost:8000`.  
 Interactive Swagger docs: `http://localhost:8000/docs`
+
+---
+
+## ☁️ Deploying to Hugging Face Spaces
+
+This repo includes a `Dockerfile` for the Spaces Docker SDK (model weights are baked into the image at build time so cold starts don't re-download them).
+
+1. Create a new Space with **SDK: Docker**, then add this repo as a remote and push:
+   ```bash
+   git remote add space https://huggingface.co/spaces/<user>/<space-name>
+   git push space main
+   ```
+2. Under the Space's **Settings → Variables and secrets**, add `GROQ_API_KEY`, `GROQ_MODEL`, and `TAVILY_API_KEY`. Do **not** commit `.env` — it's gitignored.
+3. **Storage is ephemeral on the free tier**: uploaded documents, the FAISS index, and chat memory reset whenever the Space restarts or sleeps. Fine for a demo; for persistence you'd need HF's paid persistent storage add-on or an external volume/DB.
 
 ---
 
