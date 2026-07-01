@@ -24,3 +24,5 @@ tqdm
 pandas
 openpyxl
 transformers
+rank_bm25
+comtypes; sys_platform == "win32"

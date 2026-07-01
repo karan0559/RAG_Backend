@@ -428,7 +428,7 @@ body{font-family:'Inter',sans-serif;background:var(--bg0);color:var(--t1);height
 // ═══════════════════════════════════════
 //  NEW UI CONTROLLER
 // ═══════════════════════════════════════
-const API = 'http://127.0.0.1:8000';
+const API = window.location.origin;
 
 // ── Session ID with TTL ────────────────────────────────────────────────────
 // We store the SID alongside a creation timestamp.  If the session is older
