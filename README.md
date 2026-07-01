@@ -18,10 +18,10 @@ Supports document understanding across **PDFs, DOCX, images, audio, web URLs, an
 ## 🚀 Features
 
 - 📥 Upload and parse multiple file types: PDF, DOCX, images, audio, URLs, YouTube transcripts
-- ✂️ Chunk and embed content using `intfloat/e5-large-v2` (1024-dim dense vectors)
+- ✂️ Chunk and embed content using Cohere's `embed-english-v3.0` (1024-dim dense vectors)
 - 🗄️ Store and search vectors in FAISS with `doc_id|chunk` tagging for session scoping
 - 🔀 Hybrid retrieval: dense FAISS + sparse BM25 fused via **Reciprocal Rank Fusion (RRF)**
-- 🏆 Rerank candidates using `BAAI/bge-reranker-base` cross-encoder for precision
+- 🏆 Rerank candidates using Cohere's `rerank-english-v3.0` for precision
 - 🤖 Answer queries using **LLaMA 3 (via Groq API)** with injected document context
 - 🧠 Session-scoped 30-turn conversation memory via **ChromaDB** (DuckDB backend)
 - 🌐 Automatic fallback to **Tavily web search** when retrieval confidence is low
@@ -186,7 +186,13 @@ Create a `.env` file in the project root:
 GROQ_API_KEY=your_groq_api_key
 GROQ_MODEL=llama3-70b-8192
 TAVILY_API_KEY=your_tavily_api_key   # optional, required for web fallback
+COHERE_API_KEY=your_cohere_api_key   # required for embeddings + reranking
 ```
+
+> Embeddings, reranking, and audio transcription all run through hosted APIs
+> (Cohere and Groq) rather than local models, so there are no ML weights to
+> download or bake into the app. Note: Cohere trial keys are rate-limited —
+> use a production key for reliable throughput.
 
 ### 4. Run the server
 
@@ -208,7 +214,7 @@ This repo includes a `Dockerfile` for the Spaces Docker SDK (model weights are b
    git remote add space https://huggingface.co/spaces/<user>/<space-name>
    git push space main
    ```
-2. Under the Space's **Settings → Variables and secrets**, add `GROQ_API_KEY`, `GROQ_MODEL`, and `TAVILY_API_KEY`. Do **not** commit `.env` — it's gitignored.
+2. Under the Space's **Settings → Variables and secrets**, add `GROQ_API_KEY`, `GROQ_MODEL`, `TAVILY_API_KEY`, and `COHERE_API_KEY`. Do **not** commit `.env` — it's gitignored.
 3. **Storage is ephemeral on the free tier**: uploaded documents, the FAISS index, and chat memory reset whenever the Space restarts or sleeps. Fine for a demo; for persistence you'd need HF's paid persistent storage add-on or an external volume/DB.
 
 ---

@@ -1,52 +1,44 @@
-from transformers import AutoTokenizer, AutoModelForSequenceClassification
-import torch
 import os
+import httpx
+
+COHERE_RERANK_URL = "https://api.cohere.com/v1/rerank"
+
 
 class Reranker:
     def __init__(self, model_name=None, device=None):
-        model_name = model_name or os.getenv("RERANK_MODEL", "BAAI/bge-reranker-base")
-        self.tokenizer = AutoTokenizer.from_pretrained(model_name)
-        self.model = AutoModelForSequenceClassification.from_pretrained(model_name)
-
-        if device is None:
-            self.device = "cuda" if torch.cuda.is_available() else "cpu"
-        else:
-            self.device = device
-  
-        self.model.to(self.device)
-        self.model.eval()
+        # device is unused (no local model to place on cuda/cpu) — kept for
+        # call-site compatibility with the previous local cross-encoder API.
+        self.model_name = model_name or os.getenv("RERANK_MODEL", "rerank-english-v3.0")
+        self.api_key = os.getenv("COHERE_API_KEY")
 
     def rerank(self, query: str, passages: list[str], top_n=5, batch_size: int = 16):
         if not passages:
             return [], []
 
-        # Pre-truncate to ~450 words so the tokenizer doesn't cut off
-        # important content mid-sentence at the 512-token limit.
+        if not self.api_key:
+            raise RuntimeError("COHERE_API_KEY is not set in .env")
+
+        # Pre-truncate to ~450 words so a single passage doesn't blow past
+        # Cohere's per-document token limit.
         passages = [" ".join(p.split()[:450]) for p in passages]
 
-        all_scores = []
-        for i in range(0, len(passages), batch_size):
-            batch = passages[i:i + batch_size]
-            pairs = [(query, passage) for passage in batch]
-            inputs = self.tokenizer.batch_encode_plus(
-                pairs,
-                padding=True,
-                truncation=True,
-                max_length=512,
-                return_tensors="pt"
-            ).to(self.device)
+        response = httpx.post(
+            COHERE_RERANK_URL,
+            headers={"Authorization": f"Bearer {self.api_key}"},
+            json={
+                "model": self.model_name,
+                "query": query,
+                "documents": passages,
+                "top_n": min(top_n, len(passages)),
+            },
+            timeout=30.0,
+        )
 
-            with torch.no_grad():
-                scores = self.model(**inputs).logits.squeeze(-1)
+        if response.status_code != 200:
+            raise RuntimeError(f"Cohere rerank request failed: {response.status_code} - {response.text}")
 
-            if scores.dim() == 0:
-                all_scores.append(scores)
-            else:
-                all_scores.extend(scores)
-
-        scores_tensor = torch.stack(all_scores) if isinstance(all_scores[0], torch.Tensor) else torch.tensor(all_scores)
-
-        sorted_indices = torch.argsort(scores_tensor, descending=True)
-        top_indices = sorted_indices[:top_n].tolist()
+        results = response.json()["results"]
+        top_indices = [r["index"] for r in results]
+        scores = [r["relevance_score"] for r in results]
         reranked = [passages[i] for i in top_indices]
-        return reranked, scores_tensor[sorted_indices[:top_n]].tolist(), top_indices
+        return reranked, scores, top_indices

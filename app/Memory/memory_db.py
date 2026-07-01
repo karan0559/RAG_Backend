@@ -1,27 +1,20 @@
-from sentence_transformers import SentenceTransformer
 import chromadb
 import os
 import time
 import uuid
 from pathlib import Path
-from app.Services.model_loader import get_model
+from app.Services import embedder
 
 # Absolute path — safe regardless of the directory uvicorn is launched from.
 CHROMA_DIR = str(Path(__file__).resolve().parent.parent.parent / "data" / "chroma_memory")
 os.makedirs(CHROMA_DIR, exist_ok=True)
 
-EMBED_MODEL_NAME = "intfloat/e5-large-v2"
-
 client = chromadb.PersistentClient(path=CHROMA_DIR)
 collection = client.get_or_create_collection("chat_memory")
 
 
-def _get_model():
-    return get_model(EMBED_MODEL_NAME)
-
-
 def embed(text: str):
-    return _get_model().encode([f"query: {text}"])[0].tolist()
+    return embedder.embed_query(text).tolist()
 
 
 def add_to_memory(

@@ -1,58 +1,41 @@
 import os
-import subprocess
-import shutil
+import mimetypes
+import httpx
+from dotenv import load_dotenv
 
-# Module-level sentinel — model is loaded on first use, not at import time.
-_whisper_model = None
+load_dotenv()
 
-
-def _get_whisper_model():
-    """Lazy-load the Whisper model once and cache it."""
-    global _whisper_model
-    if _whisper_model is None:
-        try:
-            from faster_whisper import WhisperModel
-            print("[AudioTranscriber] Loading Whisper model (base, cpu)…")
-            _whisper_model = WhisperModel("base", device="cpu")
-            print("[AudioTranscriber] Whisper model ready.")
-        except Exception as e:
-            raise RuntimeError(f"Failed to load Whisper model: {e}") from e
-    return _whisper_model
-
-
-def _check_ffmpeg():
-    """Raise a clear error if FFmpeg is not available."""
-    if shutil.which("ffmpeg") is None:
-        raise EnvironmentError(
-            "FFmpeg not found in system PATH. "
-            "Install FFmpeg and make sure it is on PATH before transcribing audio."
-        )
-
-
-def convert_to_wav(input_path: str, target_sr: int = 16000) -> str:
-    _check_ffmpeg()
-    output_path = os.path.splitext(input_path)[0] + "_converted.wav"
-    cmd = [
-        "ffmpeg", "-y", "-i", input_path,
-        "-ar", str(target_sr),
-        "-ac", "1",
-        output_path,
-    ]
-    print(f"[AudioTranscriber] Converting {input_path} → {output_path}")
-    subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    return output_path
+GROQ_API_KEY = os.getenv("GROQ_API_KEY")
+GROQ_TRANSCRIPTION_URL = "https://api.groq.com/openai/v1/audio/transcriptions"
+GROQ_WHISPER_MODEL = "whisper-large-v3-turbo"
 
 
 def transcribe_audio(path: str) -> list[str]:
+    """
+    Transcribe an audio file via Groq's hosted Whisper endpoint.
+    Groq accepts mp3/wav/ogg/m4a/webm/flac/mp4/mpeg/mpga directly, so no
+    local ffmpeg conversion step is needed.
+    """
     try:
-        _check_ffmpeg()
-        ext = os.path.splitext(path)[1].lower()
-        if ext != ".wav":
-            path = convert_to_wav(path)
+        if not GROQ_API_KEY:
+            return ["Transcription failed: GROQ_API_KEY is not set in .env"]
 
-        print(f"[AudioTranscriber] Transcribing: {path}")
-        model = _get_whisper_model()
-        segments, _ = model.transcribe(path)
-        return [seg.text for seg in segments if seg.text.strip()]
+        content_type = mimetypes.guess_type(path)[0] or "application/octet-stream"
+        print(f"[AudioTranscriber] Transcribing via Groq: {path}")
+
+        with open(path, "rb") as f:
+            response = httpx.post(
+                GROQ_TRANSCRIPTION_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                files={"file": (os.path.basename(path), f, content_type)},
+                data={"model": GROQ_WHISPER_MODEL, "response_format": "json"},
+                timeout=60.0,
+            )
+
+        if response.status_code != 200:
+            raise RuntimeError(f"Groq transcription failed: {response.status_code} - {response.text}")
+
+        text = response.json().get("text", "").strip()
+        return [text] if text else []
     except Exception as e:
         return [f"Transcription failed: {e}"]

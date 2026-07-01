@@ -22,10 +22,6 @@ async def lifespan(app: FastAPI):
     from app.Services import vector_db
     vector_db.load_index()
 
-    # Pre-load the embedding model so the first query isn't slow
-    from app.Services.model_loader import get_model
-    get_model("intfloat/e5-large-v2")
-
     if os.getenv("AUTO_OPEN_BROWSER", "false").lower() == "true":
         try:
             webbrowser.open("http://127.0.0.1:8000/")   # Open the chat UI, not /docs

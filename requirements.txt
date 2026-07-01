@@ -4,17 +4,12 @@ python-multipart
 python-dotenv
 faiss-cpu
 chromadb
-sentence-transformers
---extra-index-url https://download.pytorch.org/whl/cpu
-torch
 PyMuPDF
 pdfplumber
 python-docx
 pytesseract
 pdf2image
 Pillow
-faster-whisper
-ffmpeg-python
 trafilatura
 youtube-transcript-api
 requests
@@ -24,6 +19,5 @@ edge-tts
 tqdm
 pandas
 openpyxl
-transformers
 rank_bm25
 comtypes; sys_platform == "win32"

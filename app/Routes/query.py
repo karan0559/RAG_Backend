@@ -8,7 +8,6 @@ from app.Memory import memory_db, session_docs
 from pathlib import Path
 import traceback
 import uuid
-import math
 import re
 import time
 from typing import List, Optional
@@ -38,13 +37,6 @@ def _get_reranker() -> Reranker:
     return _reranker
 
 
-def sigmoid(x: float) -> float:
-    try:
-        return 1.0 / (1.0 + math.exp(-x))
-    except OverflowError:
-        return 0.0 if x < 0 else 1.0
-
-
 def strip_prefix(chunk_text: str) -> str:
     """Remove 'doc_id|' storage tag from stored chunk text."""
     if "|" in chunk_text:
@@ -72,7 +64,7 @@ def is_non_usable_chunk(chunk_text: str) -> bool:
     return any(marker in clean for marker in bad_markers)
 
 
-# Minimum reranker confidence (sigmoid-normalised) required for a chunk to be
+# Minimum reranker confidence (Cohere's normalised relevance_score) required for a chunk to be
 # considered "found in documents".  Scores below this trigger web fallback even
 # when the vector store returns results, preventing irrelevant doc chunks from
 # suppressing the web-search path for off-topic queries.
@@ -253,8 +245,11 @@ async def query_rag(request: Request, body: QueryRequest):
                         reranked_texts, raw_scores, rerank_indices = _get_reranker().rerank(
                             body.query, rerank_candidates, top_n=body.top_k
                         )
-                        norm_scores = [sigmoid(float(s)) for s in raw_scores]
-                        print(f"  Reranker scores (sigmoid): {[round(s, 3) for s in norm_scores]}")
+                        # Cohere's rerank endpoint already returns a normalised [0,1]
+                        # relevance_score — no sigmoid needed (that was only for the
+                        # old local cross-encoder's raw logits).
+                        norm_scores = [float(s) for s in raw_scores]
+                        print(f"  Reranker scores: {[round(s, 3) for s in norm_scores]}")
                     except Exception as e:
                         print(f"  Reranker error: {e} — using FAISS order")
                         reranked_texts = raw_texts_clean[:body.top_k]
@@ -270,7 +265,7 @@ async def query_rag(request: Request, body: QueryRequest):
                     # ── Step 6: Relevance gate — score threshold check ────────
                     # FAISS + reranker always return *something* from the index
                     # even for completely unrelated queries.  We only accept doc
-                    # chunks when the best sigmoid-normalised reranker score
+                    # chunks when the best normalised reranker relevance score
                     # clears MIN_RELEVANCE_SCORE (default 0.40).  Below that the
                     # retrieved chunks are likely noise → fall back to web.
                     best_score = max(norm_scores) if norm_scores else 0.0
