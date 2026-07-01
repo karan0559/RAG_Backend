@@ -214,7 +214,7 @@ This repo includes a `Dockerfile` for the Spaces Docker SDK (model weights are b
    git remote add space https://huggingface.co/spaces/<user>/<space-name>
    git push space main
    ```
-2. Under the Space's **Settings → Variables and secrets**, add `GROQ_API_KEY`, `GROQ_MODEL`, `TAVILY_API_KEY`, and `COHERE_API_KEY`. Do **not** commit `.env` — it's gitignored.
+2. Under the Space's **Settings → Variables and secrets**, add `GROQ_API_KEY`, `GROQ_MODEL`, `TAVILY_API_KEY`, and `COHERE_API_KEY`. Do **not** commit `.env` — it's gitignored. Do **not** add `TESSERACT_PATH` as a secret either: your local `.env` points it at a Windows install path, which would break OCR on the Linux container — the image's apt-installed `tesseract-ocr` is already on `PATH` and picked up automatically when the variable is unset.
 3. **Storage is ephemeral on the free tier**: uploaded documents, the FAISS index, and chat memory reset whenever the Space restarts or sleeps. Fine for a demo; for persistence you'd need HF's paid persistent storage add-on or an external volume/DB.
 
 ---

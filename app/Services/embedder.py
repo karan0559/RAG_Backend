@@ -12,14 +12,14 @@ COHERE_API_KEY = os.getenv("COHERE_API_KEY")
 COHERE_EMBED_URL = "https://api.cohere.com/v1/embed"
 EMBED_MODEL_NAME = "embed-english-v3.0"
 
+# Cohere caps a single /v1/embed request at 96 texts.
+COHERE_EMBED_BATCH_SIZE = 96
+
 # Note: Cohere trial keys are rate-limited (see cohere.com for account
 # management); replace with a production key if you hit quota errors.
 
 
-def _cohere_embed(texts: List[str], input_type: str) -> np.ndarray:
-    if not COHERE_API_KEY:
-        raise RuntimeError("COHERE_API_KEY is not set in .env")
-
+def _cohere_embed_batch(texts: List[str], input_type: str) -> np.ndarray:
     response = httpx.post(
         COHERE_EMBED_URL,
         headers={"Authorization": f"Bearer {COHERE_API_KEY}"},
@@ -38,6 +38,17 @@ def _cohere_embed(texts: List[str], input_type: str) -> np.ndarray:
     data = response.json()
     embeddings = data["embeddings"]["float"] if isinstance(data["embeddings"], dict) else data["embeddings"]
     return np.array(embeddings, dtype=np.float32)
+
+
+def _cohere_embed(texts: List[str], input_type: str) -> np.ndarray:
+    if not COHERE_API_KEY:
+        raise RuntimeError("COHERE_API_KEY is not set in .env")
+
+    batches = [
+        _cohere_embed_batch(texts[i:i + COHERE_EMBED_BATCH_SIZE], input_type)
+        for i in range(0, len(texts), COHERE_EMBED_BATCH_SIZE)
+    ]
+    return np.concatenate(batches, axis=0)
 
 
 def embed_chunks(chunks: List[str], doc_id: str, metadata: Dict = None) -> np.ndarray:
