@@ -209,7 +209,7 @@ Interactive Swagger docs: `http://localhost:8000/docs`
 
 ## ☁️ Deploying to Hugging Face Spaces
 
-This repo includes a `Dockerfile` for the Spaces Docker SDK (model weights are baked into the image at build time so cold starts don't re-download them).
+This repo includes a `Dockerfile` for the Spaces Docker SDK. Embeddings, reranking, and audio transcription all run through hosted APIs (Cohere and Groq) rather than local models, so the image is lightweight (~1.7GB) with nothing to bake in at build time.
 
 1. Create a new Space with **SDK: Docker**, then add this repo as a remote and push:
    ```bash
@@ -218,6 +218,10 @@ This repo includes a `Dockerfile` for the Spaces Docker SDK (model weights are b
    ```
 2. Under the Space's **Settings → Variables and secrets**, add `GROQ_API_KEY`, `GROQ_MODEL`, `TAVILY_API_KEY`, and `COHERE_API_KEY`. Do **not** commit `.env` — it's gitignored. Do **not** add `TESSERACT_PATH` as a secret either: your local `.env` points it at a Windows install path, which would break OCR on the Linux container — the image's apt-installed `tesseract-ocr` is already on `PATH` and picked up automatically when the variable is unset.
 3. **Storage is ephemeral on the free tier**: uploaded documents, the FAISS index, and chat memory reset whenever the Space restarts or sleeps. Fine for a demo; for persistence you'd need HF's paid persistent storage add-on or an external volume/DB.
+
+### Known limitations
+
+- **YouTube ingestion on cloud hosts**: `youtube-transcript-api` frequently fails on Hugging Face Spaces (and other cloud/datacenter hosts) with `SSLEOFError` — YouTube blocking the datacenter IP range at the TLS layer rather than returning a clean HTTP error. This is a platform-level restriction, not a bug in this codebase; YouTube URL ingestion works reliably when run locally but may be unreliable once deployed. Regular web URLs (non-YouTube) are unaffected.
 
 ---
 

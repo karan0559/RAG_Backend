@@ -11,10 +11,10 @@ def extract_youtube_transcript(url: str):
         transcript = YouTubeTranscriptApi().fetch(video_id).to_raw_data()
         return [segment["text"] for segment in transcript if segment["text"].strip()]
     except Exception as e:
-        # TEMPORARY diagnostic print — remove once the cloud-host failure
-        # mode is confirmed (nothing currently logs the raw exception before
-        # the extractor's garbage-text filter discards it).
-        print(f"[YouTubeTranscriber] RAW ERROR for {url}: {type(e).__name__}: {e}")
+        # On cloud hosts (e.g. HF Spaces) this frequently fails with an
+        # SSLEOFError — YouTube blocking the datacenter IP at the TLS layer
+        # rather than returning a clean HTTP error. See README's "Known
+        # limitations" section.
         return [f" YouTube transcript failed: {e}"]
 
 def extract_video_id(url: str) -> str:
