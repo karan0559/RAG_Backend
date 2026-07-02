@@ -54,14 +54,24 @@ def is_non_usable_chunk(chunk_text: str) -> bool:
     clean = strip_prefix(chunk_text).strip().lower()
     if not clean:
         return True
+    # Kept in sync with app/Services/extractor.py's _looks_like_error_text —
+    # this is the query-time safety net for chunks that were indexed before
+    # that filter existed or was tightened.
     bad_markers = (
         "ocr failed:",
         "extraction failed:",
+        "pdf parsing failed:",
+        "docx parsing failed:",
+        "transcription failed:",
+        "failed to fetch url",
+        "request failed:",
+        "youtube transcript failed:",
+        "failed to extract video id",
         "unsupported file type",
         "unsupported parser output format",
         "no readable text found",
     )
-    return any(marker in clean for marker in bad_markers)
+    return any(clean.startswith(marker) for marker in bad_markers)
 
 
 # Minimum reranker confidence (Cohere's normalised relevance_score) required for a chunk to be

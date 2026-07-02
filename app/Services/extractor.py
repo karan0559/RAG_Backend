@@ -13,14 +13,24 @@ def _looks_like_error_text(text: str) -> bool:
     normalized = (text or "").strip().lower()
     if not normalized:
         return True
+    # Prefixes every parser's failure path returns (see app/Services/parsers/*.py).
+    # Matched with startswith rather than "in" so a legitimate document that
+    # happens to mention e.g. "the test failed" isn't rejected wholesale.
     error_markers = (
         "ocr failed:",
         "extraction failed:",
+        "pdf parsing failed:",
+        "docx parsing failed:",
+        "transcription failed:",
+        "failed to fetch url",
+        "request failed:",
+        "youtube transcript failed:",
+        "failed to extract video id",
         "unsupported file type",
         "unsupported parser output format",
         "no readable text found",
     )
-    if any(marker in normalized for marker in error_markers):
+    if any(normalized.startswith(marker) for marker in error_markers):
         return True
 
     clean_text = text.strip()

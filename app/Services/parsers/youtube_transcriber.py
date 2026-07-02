@@ -6,7 +6,9 @@ def extract_youtube_transcript(url: str):
         video_id = extract_video_id(url)
         if not video_id:
             return [" Failed to extract video ID."]
-        transcript = YouTubeTranscriptApi.get_transcript(video_id)
+        # get_transcript() is a deprecated classmethod removed in some
+        # library versions; fetch() is the current instance-based API.
+        transcript = YouTubeTranscriptApi().fetch(video_id).to_raw_data()
         return [segment["text"] for segment in transcript if segment["text"].strip()]
     except Exception as e:
         return [f" YouTube transcript failed: {e}"]
