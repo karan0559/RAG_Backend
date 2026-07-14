@@ -12,29 +12,24 @@ GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL", "llama3-70b-8192")
 GROQ_API_URL = "https://api.groq.com/openai/v1/chat/completions"
 
-# Shared async HTTP client (connection pool reuse across requests)
-_http_client: httpx.AsyncClient | None = None
-
-
-def get_http_client() -> httpx.AsyncClient:
-    global _http_client
-    if _http_client is None or _http_client.is_closed:
-        _http_client = httpx.AsyncClient(timeout=30.0)
-    return _http_client
-
-
 async def call_groq_llm(payload: dict) -> str:
-    """Async call to Groq API — does NOT block the FastAPI event loop."""
+    """Async call to Groq API — does NOT block the caller's event loop.
+
+    Creates a fresh client per call rather than reusing a module-level
+    singleton, since callers may run this under different event loops
+    (e.g. FastAPI's persistent loop vs. Streamlit's per-interaction
+    asyncio.run()) — a client bound to a closed loop would error on reuse.
+    """
     if not GROQ_API_KEY:
         raise RuntimeError("GROQ_API_KEY is not set in .env")
 
-    client = get_http_client()
     try:
-        response = await client.post(
-            GROQ_API_URL,
-            headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
-            json=payload,
-        )
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.post(
+                GROQ_API_URL,
+                headers={"Authorization": f"Bearer {GROQ_API_KEY}"},
+                json=payload,
+            )
 
         if response.status_code != 200:
             error_details = response.text
